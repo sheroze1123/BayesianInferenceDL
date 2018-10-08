@@ -102,3 +102,8 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+.DS_store
+
+scratch/outputs
+hippylib-2.1.0/
