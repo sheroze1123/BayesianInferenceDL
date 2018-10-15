@@ -1,0 +1,8 @@
+Implement model contrained adaptive sampling
+    - Implement gradient computation!
+    - Implement minimizer (Coleman-Li for constraints vs regular Lagrangian)
+    - Update basis
+Solve ROM
+    - Project system to basis
+    - Solve resulting system
+    - Compute errors
