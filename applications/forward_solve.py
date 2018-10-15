@@ -1,6 +1,47 @@
 from dolfin import *
 import numpy as np
 
+def forward_setup(V):
+    '''
+    Sets up weak form and discretize matrices for future computation
+    '''
+    mesh = V.mesh()
+    v = TestFunction(V)
+
+    domains = MeshFunction("size_t", mesh, mesh.topology().dim())
+    domains.set_all(0)
+
+    # boundary conditions
+    bottom = CompiledSubDomain("near(x[1], side) && on_boundary", side = 0.0)
+    exterior = CompiledSubDomain("!near(x[1], side) && on_boundary", side = 0.0)
+    boundaries = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
+    boundaries.set_all(0)
+    exterior.mark(boundaries, 1)
+    bottom.mark(boundaries, 2)
+
+    dx = Measure('dx', domain=mesh, subdomain_data=domains)
+    ds = Measure('ds', domain=mesh, subdomain_data=boundaries)
+
+    # Setting up the variational form
+    Bi = Constant(0.1)
+    F = inner(m * grad(w), grad(v)) * dx(0) + v * Bi * w * ds(1)
+    a = v * ds(2)
+
+    dF_dm = inner(grad(w), grad(v)) * dx(0)
+    A = assemble(F)
+    B = assemble(a)
+    dA_dz = assemble(dF_dm)
+
+    # Kinda hacky way to get C as the averaging operator over the domain. Probably a better way
+    d_omega_f = interpolate(Expression("1.0", degree=2), V)
+    domain_integral = assemble(v*dx)
+    domain_measure = np.dot(np.array(d_omega_f.vector()[:]), np.array(domain_integral[:]))
+    C = domain_integral/domain_measure
+
+    return A, B, C, dA_dz
+
+
+
 def forward(m, V):
     '''
     Performs a forward solve to obtain temperature distribution
@@ -102,6 +143,9 @@ def optimizer(z_0, phi, V):
     '''
     Finds the parameter with the maximum ROM error given a starting point z_0
     '''
+    A, B, C, dA_dz = forward_setup(V)
+    psi = np.dot(A, phi)
+
     bounds = scipy.optimize.Bounds(0.1, 10)
     optimize_result = scipy.optimize.minimize(-cost_functional, 
                             z_0, 

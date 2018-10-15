@@ -1,12 +1,15 @@
 from scipy.optimize import minimize
 
-def sample(basis, z_0, tol=1.0e-14, optimizer):
-    z_star, g_z_star = optimizer() # z_star = arg max G(z)
-    # Use scipy.optimize.minimize to get z_star. What's left is to use the Lagrangian method to
-    # compute gradients (and maybe Hessians). One forward and one adjoint solve is all we need 
-    # for this. 
-    while min_val > tol:
+def sample(basis, z_0, tol=1.0e-14, maxiter=500, optimizer):
+    iterations = 1
+    while g_z_star > tol or iterations > maxiter:
+        # Perform optimization to find parameter with the maximum error
+        z_star, g_z_star = optimizer(z_0, basis, V) 
+
         #Solve full system with z_star and obtain state vector x(z_star)
+        w = forward(z_star, V)
         #Enrich basis with generated snapshots
+        basis = enrich(basis,w)
+        iterations += 1
     return basis
 
