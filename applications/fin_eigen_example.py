@@ -5,8 +5,6 @@ from dolfin import *
 import mshr
 import numpy as np
 from forward_solve import forward 
-from error_optimization import optimize
-from model_constr_adaptive_sampling import sample
 
 # Create a fin geometry
 geometry = mshr.Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
@@ -20,13 +18,12 @@ geometry = mshr.Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
         + mshr.Rectangle(Point(3.5, 3.75), Point(6.0, 4.0)) \
 
 mesh = mshr.generate_mesh(geometry, 40)
+plot(mesh)
+plt.show()
 
 V = FunctionSpace(mesh, 'CG', 1)
 dofs = len(V.dofmap().dofs())
 
-##########################################################3
-# Basis initialization with dummy solves and POD
-##########################################################3
 samples = 5
 Y = np.zeros((samples, dofs))
 for i in range(0,samples):
@@ -36,20 +33,50 @@ for i in range(0,samples):
     else:
         m = interpolate(Expression("c*x[0] + 0.1", degree=2, c=2.0*i), V)
 
-    w = forward(m, V)[0]
+    w = forward(m, V)
+
+    #  if i%45 == 0:
+        #  p = plot(w, title="Temperature")
+        #  plt.colorbar(p)
+        #  plt.show()
     Y[i,:] = w.vector()[:]
 
 K = np.dot(Y, Y.T)
 e,v = np.linalg.eig(K)
+plt.semilogy(e.real, 'b.' )
+plt.title("Eigenvalues")
+plt.show()
 
-U = np.zeros((2, dofs))
-for i in range(2):
+U = np.zeros((3, dofs))
+for i in range(3):
     e_i = v[:,i].real
     U[i,:] = np.sum(np.dot(np.diag(e_i), Y),0)
 
-basis = U.T
-z_0 = Function(V)
-z_0.vector().set_local(np.random.uniform(0.1, 10, dofs))
-basis = sample(basis, z_0, optimize, forward, V)
+m = Function(V)
+m.vector().set_local(U[0,:])
 
-print("Computer basis with shape {}".format(basis.shape))
+fig = plt.figure()
+p = plot(m, title="First eigenvector with eigenvalue {}".format(e[0].real))
+plt.colorbar(p)
+plt.show()
+
+m = Function(V)
+m.vector().set_local(U[1,:])
+
+fig = plt.figure()
+p = plot(m, title="Second eigenvector with eigenvalue {}".format(e[1].real))
+plt.colorbar(p)
+plt.show()
+
+m = Function(V)
+m.vector().set_local(U[2,:])
+
+fig = plt.figure()
+p = plot(m, title="Third eigenvector with eigenvalue {}".format(e[2].real))
+plt.colorbar(p)
+plt.show()
+
+plt.figure()
+p = plot(w, title="Temperature")
+plt.colorbar(p)
+plt.show()
