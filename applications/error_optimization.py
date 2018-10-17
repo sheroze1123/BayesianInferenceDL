@@ -2,6 +2,7 @@ from dolfin import *
 import numpy as np
 from forward_solve import forward
 import scipy.optimize
+import time
 
 def get_reduced_system(A, B, C, psi, phi):
     '''
@@ -41,6 +42,8 @@ def gradient(z_vec, psi, phi, V):
     w = TrialFunction(V)
     v = TestFunction(V)
 
+    t_i = time.time()
+    # Reimplement this in tensor format to vastly improve perforamnce
     for i in range(x.shape[0]):
         m = Function(V)
         m.vector()[i] = 1
@@ -48,6 +51,9 @@ def gradient(z_vec, psi, phi, V):
         dA_dz = assemble(dA_dz_weak).array()
         dA_r_dz = np.dot(psi.T, np.dot(dA_dz, phi))
         grad_G[i] = np.dot(lambda_f.T, np.dot(dA_dz, x)) + np.dot(lambda_r.T, np.dot(dA_r_dz, x_r))
+
+    t_f = time.time()
+    print("Time taken for gradient computation: {}".format(t_f - t_i))
 
     #  import pdb; pdb.set_trace()
     return grad_G
@@ -81,8 +87,10 @@ def optimize(z_0, phi, V):
                             args=(psi, phi, V), 
                             method='L-BFGS-B', 
                             jac=gradient,
+                            options={'maxiter':3}, #Hilariously low
                             bounds=z_bounds)
 
+    print("\nOptimization run complete\n")
     z_star = Function(V)
     z_star.vector().set_local(optimize_result.x)
     g_z_star = optimize_result.fun

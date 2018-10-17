@@ -1,4 +1,6 @@
 from error_optimization import optimize
+import numpy as np
+import time
 
 def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=500):
     '''
@@ -14,12 +16,19 @@ def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=500):
     '''
     iterations = 0
     g_z_star = 1e30
-    while g_z_star > tol or iterations > maxiter:
+
+    while abs(g_z_star) > tol and iterations < maxiter:
         # Perform optimization to find parameter with the maximum error
+
+        t_i = time.time()
         z_star, g_z_star = optimizer(z_0, basis, V) 
+        t_f = time.time()
+        print("Single optimizer run time taken: {}".format(t_f - t_i))
 
         #Solve full system with z_star and obtain state vector x(z_star)
-        w = forward(z_star, V)
+        #  import pdb; pdb.set_trace()
+        w = forward(z_star, V)[0].vector()[:]
+        w = w.reshape(w.shape[0], 1)
         #Enrich basis with generated snapshots
         basis = enrich(basis,w)
         iterations += 1

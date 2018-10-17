@@ -1,8 +1,6 @@
 Implement model contrained adaptive sampling
-    - Implement gradient computation!
-    - Implement minimizer (Coleman-Li for constraints vs regular Lagrangian)
-    - Update basis
-Solve ROM
-    - Project system to basis
-    - Solve resulting system
-    - Compute errors
+    - Clean up gradient computation to use tensors
+    - Super slow method compared to random sampling? Quick implementation of random to check eig-vals
+Learning ROM error
+    - RBnics to prototype here?
+    - Save basis from MCAS and learn error term
