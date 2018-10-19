@@ -2,7 +2,7 @@ from error_optimization import optimize
 import numpy as np
 import time
 
-def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=500):
+def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=10):
     '''
     Model constrained adaptive sampler to create trial basis for ROM
     Arguments:
@@ -21,17 +21,18 @@ def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=500):
         # Perform optimization to find parameter with the maximum error
 
         t_i = time.time()
-        z_star, g_z_star = optimizer(z_0, basis, V) 
+        z_star, g_z_star = optimizer(z_0, basis, V)
         t_f = time.time()
-        print("Single optimizer run time taken: {}".format(t_f - t_i))
+        iterations += 1
+        print("\nOptimization iteration: {}".format(iterations))
+        print("Single optimizer run time taken: {}\n".format(t_f - t_i))
 
         #Solve full system with z_star and obtain state vector x(z_star)
-        #  import pdb; pdb.set_trace()
         w = forward(z_star, V)[0].vector()[:]
         w = w.reshape(w.shape[0], 1)
+
         #Enrich basis with generated snapshots
         basis = enrich(basis,w)
-        iterations += 1
         
     print("Sampling completed after {} iterations".format(iterations))
     return basis
