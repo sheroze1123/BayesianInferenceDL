@@ -65,7 +65,7 @@ def forward(m, V):
     # TODO: Compute quantity of interest
     w_nodal_values = np.array(w.vector()[:]) 
     y = np.mean(w_nodal_values)
-    print("Average temperature: {}".format(y))
+    #  print("Average temperature: {}".format(y))
 
     C = averaging_operator(V)
 

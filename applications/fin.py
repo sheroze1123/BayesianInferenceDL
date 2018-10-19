@@ -9,6 +9,8 @@ from forward_solve import forward, reduced_forward
 from error_optimization import optimize
 from model_constr_adaptive_sampling import sample
 
+set_log_level(40)
+
 # Create a fin geometry
 geometry = mshr.Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
         + mshr.Rectangle(Point(0.0, 0.75), Point(2.5, 1.0)) \
@@ -68,8 +70,8 @@ t_i = time.time()
 basis = sample(basis, z_0, optimize, forward, V)
 t_f = time.time()
 print("Sampling time taken: {}".format(t_f - t_i))
-
 print("Computed basis with shape {}".format(basis.shape))
+
 m = interpolate(Expression("2*x[1] + 1.0", degree=2), V)
 w, y, A, B, C, dA_dz  = forward(m, V)
 p = plot(m, title="Conductivity")

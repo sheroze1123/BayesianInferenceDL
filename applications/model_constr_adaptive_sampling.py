@@ -2,7 +2,7 @@ from error_optimization import optimize
 import numpy as np
 import time
 
-def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=10):
+def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=50):
     '''
     Model constrained adaptive sampler to create trial basis for ROM
     Arguments:
@@ -24,8 +24,7 @@ def sample(basis, z_0, optimizer, forward, V, tol=1.0e-14, maxiter=10):
         z_star, g_z_star = optimizer(z_0, basis, V)
         t_f = time.time()
         iterations += 1
-        print("\nOptimization iteration: {}".format(iterations))
-        print("Single optimizer run time taken: {}\n".format(t_f - t_i))
+        print("Optimizer iteration {} time taken: {}\n".format(iterations, t_f - t_i))
 
         #Solve full system with z_star and obtain state vector x(z_star)
         w = forward(z_star, V)[0].vector()[:]
