@@ -61,7 +61,6 @@ class G:
         t_f = time.time()
         print("Time taken for gradient computation: {}".format(t_f - t_i))
 
-        #  import pdb; pdb.set_trace()
         return -grad_G
 
     def cost_functional(self, z_vec, psi, phi, V):
@@ -75,8 +74,8 @@ class G:
         A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, psi, phi)
 
         # Since we are using a minimizer, cost function has to be negated
-        
         cost = -0.5 * (y - y_r)**2
+
         print("\nCost at given basis: {}\n".format(-cost))
         return cost
 
