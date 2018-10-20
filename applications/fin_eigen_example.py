@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from dolfin import *
 import mshr
 import numpy as np
-from forward_solve import forward 
+from forward_solve import Fin 
 
 # Create a fin geometry
 geometry = mshr.Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
@@ -23,6 +23,7 @@ plt.show()
 
 V = FunctionSpace(mesh, 'CG', 1)
 dofs = len(V.dofmap().dofs())
+solver = Fin(V)
 
 samples = 5
 Y = np.zeros((samples, dofs))
@@ -33,7 +34,7 @@ for i in range(0,samples):
     else:
         m = interpolate(Expression("c*x[0] + 0.1", degree=2, c=2.0*i), V)
 
-    w = forward(m, V)
+    w = solver.forward(m)[0]
 
     #  if i%45 == 0:
         #  p = plot(w, title="Temperature")

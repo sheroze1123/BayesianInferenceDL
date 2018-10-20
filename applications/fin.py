@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from dolfin import *
 import mshr
 import numpy as np
-from forward_solve import forward, reduced_forward
+from forward_solve import Fin
 from error_optimization import optimize
-from model_constr_adaptive_sampling import sample
+from model_constr_adaptive_sampling import sample, enrich
 
 set_log_level(40)
 
@@ -26,6 +26,7 @@ mesh = mshr.generate_mesh(geometry, 40)
 
 V = FunctionSpace(mesh, 'CG', 1)
 dofs = len(V.dofmap().dofs())
+solver = Fin(V)
 
 ##########################################################3
 # Basis initialization with dummy solves and POD
@@ -48,7 +49,7 @@ for i in range(0,samples):
         m = Function(V)
         m.vector().set_local(np.random.uniform(0.1, 10.0, dofs))
 
-    w = forward(m, V)[0]
+    w = solver.forward(m)[0]
     Y[i,:] = w.vector()[:]
 
 K = np.dot(Y, Y.T)
@@ -63,24 +64,27 @@ for i in range(basis_size):
     U[i,:] = np.sum(np.dot(np.diag(e_i), Y),0)
 
 basis = U.T
-z_0 = Function(V)
-z_0.vector().set_local(np.random.uniform(0.1, 10, dofs))
 
 t_i = time.time()
-basis = sample(basis, z_0, optimize, forward, V)
+def random_initial():
+    z_0 = Function(V)
+    z_0.vector().set_local(np.random.uniform(0.1, 10.0, dofs))
+    return z_0
+
+basis = sample(basis, random_initial, optimize, solver)
 t_f = time.time()
 print("Sampling time taken: {}".format(t_f - t_i))
 print("Computed basis with shape {}".format(basis.shape))
 
 m = interpolate(Expression("2*x[1] + 1.0", degree=2), V)
-w, y, A, B, C, dA_dz  = forward(m, V)
+w, y, A, B, C  = solver.forward(m)
 p = plot(m, title="Conductivity")
 plt.colorbar(p)
 plt.show()
 p = plot(w, title="Temperature")
 plt.colorbar(p)
 plt.show()
-A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, np.dot(A, basis), basis) 
+A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, np.dot(A, basis), basis) 
 x_tilde = np.dot(basis, x_r)
 x_tilde_f = Function(V)
 x_tilde_f.vector().set_local(x_tilde)
@@ -88,5 +92,22 @@ p = plot(x_tilde_f, title="Temperature reduced")
 plt.colorbar(p)
 plt.show()
 
-print("Reduced system error: {}".format(np.linalg.norm(y-y_r)))
+print("Reduced system relative error: {}".format(np.linalg.norm(y-y_r)/np.abs(y)))
 np.savetxt("basis.txt", basis, delimiter=",")
+
+#Modify basis
+w = w.vector()[:]
+w = w.reshape(w.shape[0], 1)
+basis = enrich(basis, w)
+
+A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, np.dot(A, basis), basis) 
+x_tilde = np.dot(basis, x_r)
+x_tilde_f = Function(V)
+x_tilde_f.vector().set_local(x_tilde)
+p = plot(x_tilde_f, title="Temperature reduced")
+plt.colorbar(p)
+plt.show()
+
+print("Reduced system relative error with added snapshot: {}".format(np.linalg.norm(y-y_r)/np.abs(y)))
+np.savetxt("basis.txt", basis, delimiter=",")
+

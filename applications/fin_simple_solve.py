@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from dolfin import *
 import mshr
 import numpy as np
-from forward_solve import forward 
+from forward_solve import Fin
 
 # Create a fin geometry
 geometry = mshr.Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
@@ -30,7 +30,8 @@ print("DOFS: {}".format(dofs))
 
 #  m = interpolate(Expression("2.0*exp(-(pow(x[0] - 0.5, 2) + pow(x[1]-0.5, 2)) / 0.02)", degree=2), V)
 m = interpolate(Expression("5- x[1]", degree=2), V)
-w = forward(m, V)
+solver = Fin(V)
+w = solver.forward(m)[0]
 fig = plt.figure()
 p = plot(m, title="Conductivity")
 plt.colorbar(p)

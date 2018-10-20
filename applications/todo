@@ -1,6 +1,11 @@
 Implement model contrained adaptive sampling
-    - Clean up gradient computation to use tensors
-    - Super slow method compared to random sampling? Quick implementation of random to check eig-vals
+    - Reimplement in PETScVector format
+    - PETSc Optimization tools
+
+Improve performance
+    - Precompute B, C
+    - Use PETScMatrix only!
+
 Learning ROM error
     - RBnics to prototype here?
     - Save basis from MCAS and learn error term

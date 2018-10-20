@@ -1,21 +1,21 @@
 from dolfin import *
 import numpy as np
-from forward_solve import forward, reduced_forward
+from forward_solve import Fin
 import scipy.optimize
 #  import time
 
 
-def gradient(z_vec, psi, phi, V):
+def gradient(z_vec, psi, phi, solver):
     '''
     Computes the gradient of the objective function G with respect to 
     the parameters z using the method of Lagrange multipliers
     '''
 
-    z = Function(V)
+    #TODO: Rewrite this in full PETSc for improved performance and standardization
+    z = Function(solver.V)
     z.vector().set_local(z_vec)
-    x_f, y, A, B, C, dA_dz = forward(z, V)
-    x = x_f.vector()[:]
-    A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, psi, phi)
+    x, y, A, B, C = solver.forward(z)
+    A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
     lambda_f = np.linalg.solve(A.T, C.T * (y_r - y))
 
     #TODO: Fix the singular matrix issues
@@ -25,28 +25,25 @@ def gradient(z_vec, psi, phi, V):
         print ("Singular matrix in reduced adjoint solve")
         import pdb; pdb.set_trace()
 
-    x_shape = x.shape
-    grad_G = np.zeros(x.shape)
-    x = x_f
-    z_hat = TrialFunction(V)
-    v = TestFunction(V)
+    z_hat = TrialFunction(solver.V)
+    v = TestFunction(solver.V)
 
     #TODO: Verify gradient
-    dR_dz = assemble(z_hat * inner(grad(x), grad(v)) * dx).array()
+    dR_dz = assemble(z_hat * inner(grad(x), grad(v)) * solver.dx).array()
     dR_r_dz = np.dot(psi.T, dR_dz)
     grad_G = dR_dz @ lambda_f + lambda_r @ dR_r_dz
 
     return -grad_G
 
-def cost_functional(z_vec, psi, phi, V):
+def cost_functional(z_vec, psi, phi, solver):
     '''
     Computes the error between the QoI produced by the full vs the 
     reduced order model (0.5 * || y - y_r ||_2^2)
     '''
-    z = Function(V)
+    z = Function(solver.V)
     z.vector().set_local(z_vec)
-    x, y, A, B, C, dA_dz = forward(z, V)
-    A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, psi, phi)
+    x, y, A, B, C = solver.forward(z)
+    A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
 
     # Since we are using a minimizer, cost function has to be negated
     cost = -0.5 * (y - y_r)**2
@@ -54,26 +51,27 @@ def cost_functional(z_vec, psi, phi, V):
     #  print("\nCost at given basis: {}\n".format(-cost))
     return cost
 
-def optimize(z_0, phi, V):
+def optimize(z_0, phi, solver):
     '''
     Finds the parameter with the maximum ROM error given a starting point z_0
     '''
-    w, y, A, B, C, dA_dz = forward(z_0, V)
+    w, y, A, B, C = solver.forward(z_0)
     psi = np.dot(A, phi)
-    init_cost = -cost_functional(z_0.vector()[:], psi, phi, V)
+    init_cost = -cost_functional(z_0.vector()[:], psi, phi, solver)
 
     z_bounds = scipy.optimize.Bounds(0.1, 10)
-    optimize_result = scipy.optimize.minimize(cost_functional, 
+    res = scipy.optimize.minimize(cost_functional, 
                             z_0.vector()[:], 
-                            args=(psi, phi, V), 
+                            args=(psi, phi, solver), 
                             method='L-BFGS-B', 
                             jac=gradient,
-                            options={'maxiter':20}, #Hilariously low
+                            options={'maxiter':200}, 
                             bounds=z_bounds)
 
-    print("Optimizer return with message: {}".format(optimize_result.message))
-    print("Initial G: {}, Final G: {}".format(init_cost, -optimize_result.fun))
-    z_star = Function(V)
-    z_star.vector().set_local(optimize_result.x)
-    g_z_star = optimize_result.fun
+    print("Optimizer message: {}".format(res.message))
+    print("Cost functional evaluations: {}, Opt. Iterations: {}".format(res.nfev, res.nit))
+    print("Initial G: {}, Final G: {}".format(init_cost, -res.fun))
+    z_star = Function(solver.V)
+    z_star.vector().set_local(res.x)
+    g_z_star = -res.fun
     return z_star, g_z_star

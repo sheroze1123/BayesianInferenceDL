@@ -7,7 +7,7 @@ import tensorflow as tf
 from pandas import DataFrame, read_csv
 import pdb
 from numpy.random import rand
-from forward_solve import *
+from forward_solve import Fin
 from fin_functionspace import get_space
 
 class FinInput:
@@ -17,6 +17,7 @@ class FinInput:
         self.dofs = len(self.V.dofmap().dofs())
         self.phi = np.loadtxt('basis.txt',delimiter=",")
         self.batch_size = batch_size
+        self.solver = Fin(self.V)
 
     def train_input_fn(self):
         params = np.random.uniform(0.1, 1, (self.batch_size, self.dofs))
@@ -25,9 +26,9 @@ class FinInput:
         for i in range(self.batch_size):
             m = Function(self.V)
             m.vector().set_local(params[i,:])
-            w, y, A, B, C, dA_dz = forward(m, self.V)
+            w, y, A, B, C = solver.forward(m)
             psi = np.dot(A, self.phi)
-            A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, psi, self.phi)
+            A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, self.phi)
             errors[i][0] = y - y_r 
 
         return ({'x':tf.convert_to_tensor(params)}, tf.convert_to_tensor(errors))
@@ -39,9 +40,9 @@ class FinInput:
         for i in range(self.batch_size):
             m = Function(self.V)
             m.vector().set_local(params[i,:])
-            w, y, A, B, C, dA_dz = forward(m, self.V)
+            w, y, A, B, C = solver.forward(m)
             psi = np.dot(A, self.phi)
-            A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, psi, self.phi)
+            A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, self.phi)
             errors[i][0] = y - y_r 
 
         return ({'x':tf.convert_to_tensor(params)}, tf.convert_to_tensor(errors))
@@ -71,9 +72,9 @@ def main(argv):
     print(eval_result)
 
     m = interpolate(Expression("2*x[0] + 3*x[1] + 1.5", degree=2), finInstance.V)
-    w, y, A, B, C, dA_dz = forward(m, finInstance.V)
+    w, y, A, B, C = solver.forward(m)
     psi = np.dot(A, finInstance.phi)
-    A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, psi, finInstance.phi)
+    A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, finInstance.phi)
     error = y - y_r
 
     #  pred_input_fn = tf.estimator.inputs.numpy_input_fn(
