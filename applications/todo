@@ -1,11 +1,11 @@
 Implement model contrained adaptive sampling
     - Reimplement in PETScVector format
     - PETSc Optimization tools
+    - Save intermediate computations of state -> perform POD to improve basis
 
 Improve performance
-    - Precompute B, C
     - Use PETScMatrix only!
 
 Learning ROM error
-    - RBnics to prototype here?
-    - Save basis from MCAS and learn error term
+    - Architecture for regresion
+    - Precompute dataset and use shuffle

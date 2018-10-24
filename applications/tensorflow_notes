@@ -1,0 +1,13 @@
+Datasets
+
+    - Use generators in datasets
+        sequence = np.array([[[1]],[[2],[3]],[[3],[4],[5]]])
+        def generator():
+            for el in sequence:
+                yield el
+        dataset = tf.data.Dataset().batch(1).from_generator(generator,
+                                                   output_types= tf.int64, 
+                                                   output_shapes=(tf.TensorShape([None, 1])))
+        iter = dataset.make_initializable_iterator()
+        el = iter.get_next()
+    - Use initializeable iterators
