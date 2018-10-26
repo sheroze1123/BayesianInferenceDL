@@ -1,7 +1,7 @@
 import tensorflow as tf
 from math import ceil
 
-def simple_dnn_dropout(features, labels, mode, params):
+def simple_dnn(features, labels, mode, params):
     '''
     A simple deep neural network performing dropout
     in the hidden layers.

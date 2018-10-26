@@ -6,8 +6,8 @@ import numpy as np
 import tensorflow as tf
 from dolfin import *
 from forward_solve import Fin
-from generate_fin_dataset import generate, FinInput
-from models.simple_dnn_dropout import simple_dnn as model
+from generate_fin_dataset import generate, FinInput, generate_saved
+from models.simple_dnn import simple_dnn as model
 
 set_log_level(40)
 
@@ -48,7 +48,8 @@ def main(argv):
     finInstance = FinInput(batch_size, res) 
 
     # Generate test set and training set
-    train_set = generate(res, train_size)
+    #  train_set = generate(res, train_size)
+    train_set = generate_saved()
     test_set = generate(res, eval_size)
     y, y_r, error_2, pred_set = pred_dataset(finInstance)
 
@@ -91,7 +92,7 @@ if __name__ == "__main__":
     tf.flags.DEFINE_integer('eval_size', 100, 'Number of evaluation points')
     tf.flags.DEFINE_integer('eval_steps', 100, 'Number of evaluation steps to take.')
     tf.flags.DEFINE_integer('resolution', 40, 'Resolution of the finite element mesh')
-    tf.flags.DEFINE_integer('train_size', 100, 'Number of training points')
-    tf.flags.DEFINE_integer('train_steps', 400, 'Number of training steps to take.')
+    tf.flags.DEFINE_integer('train_size', 4000, 'Number of training points')
+    tf.flags.DEFINE_integer('train_steps', 4000, 'Number of training steps to take.')
     tf.logging.set_verbosity(tf.logging.INFO)
     tf.app.run(main=main)

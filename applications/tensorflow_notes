@@ -1,3 +1,8 @@
+Things to try out
+
+Different optimizers and their effects
+DNN depth and width
+
 Datasets
 
     - Use generators in datasets
@@ -11,3 +16,9 @@ Datasets
         iter = dataset.make_initializable_iterator()
         el = iter.get_next()
     - Use initializeable iterators
+
+DL Specific
+    - When is dropout suitable here?
+    - Deep vs Wide or both?
+    - Batch size?
+    
