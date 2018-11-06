@@ -36,7 +36,7 @@ Y = np.zeros((samples, dofs))
 for i in range(0,samples):
 
     if i == 0:
-        m = interpolate(Expression("0.1 +s*exp(-(pow(x[0] - c_x, 2) + pow(x[1]-c, 2)) / 0.02)", degree=2, s=2.0, c=0.03*i, c_x =0.5 + 0.01*i), V)
+        m = interpolate(Expression("0.1 + exp(-(pow(x[0] - 0.5, 2) + pow(x[1], 2)) / 0.01)", degree=2),V)
     elif i == 1:
         m = interpolate(Expression("2*x[0] + 0.1", degree=2), V)
     elif i == 2:
