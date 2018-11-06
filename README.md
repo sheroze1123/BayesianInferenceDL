@@ -1,5 +1,5 @@
 # HROM_BIDL
-Bayesian Inversion Problems with Hierarchical Reduced Order Models augmented by Deep Learning
+**H**ierarchical **R**educed **O**rder **M**odels in **B**ayesian **I**nversion augmented by **D**eep **L**earning
 
 Ongoing work on improving reduced order models by better characterizing their error using deep learning methods.
 
@@ -13,8 +13,8 @@ A reduced basis is formed using a greedy [model-constrained adaptive sampling me
 A Tensorflow estimator is used to learn the error between the high fidelity model and the reduced model. 
 
 ### Dependencies:
-FEniCS 2018.1
-hippylib 2.1.0
-python 3.6.6
-tensorflow 1.11.0
-pandas 0.23.4
+* FEniCS 2018.1
+* hippylib 2.1.0
+* python 3.6.6
+* tensorflow 1.11.0
+* pandas 0.23.4
