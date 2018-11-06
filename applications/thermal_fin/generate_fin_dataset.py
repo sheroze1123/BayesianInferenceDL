@@ -3,12 +3,26 @@ import tensorflow as tf
 from dolfin import *
 from forward_solve import Fin
 from fin_functionspace import get_space
+from pandas import read_csv
 
-def generate(resolution, dataset_size):
+def generate(dataset_size, resolution=40):
+    '''
+    Create a tensorflow dataset where the features are thermal conductivity parameters
+    and the labels are the differences in the quantity of interest between the high fidelity model
+    and the reduced order model (this is the ROM error)
+
+    Arguments: 
+        dataset_size - number of feature-label pairs
+        resolution   - finite element mesh resolution for the high fidelity model
+
+    Returns:
+        dataset      - Tensorflow dataset created from tensor slices
+    '''
+
     V = get_space(resolution)
     dofs = len(V.dofmap().dofs())
 
-    #TODO: Change this to normal with 0 mean and mass matrix covariance
+    # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
     z_s = np.random.uniform(0.1, 1, (dataset_size, dofs))
     phi = np.loadtxt('basis.txt',delimiter=",")
     solver = Fin(V)
@@ -26,12 +40,21 @@ def generate(resolution, dataset_size):
 
     return dataset
 
-def generate_saved():
-    z_s = np.loadtxt('z_s_train.txt', delimiter=",")
-    errors = np.loadtxt('errors_train.txt', delimiter=",", ndmin=2)
+def load_saved_dataset():
+    '''
+    Loads a training dataset from disk
+    '''
+    try:
+        z_s = np.loadtxt('z_s_train.txt', delimiter=",")
+        #  z_s = read_csv('z_s_train.txt', delimiter=",").values  # Using pandas for performance
+        errors = np.loadtxt('errors_train.txt', delimiter=",", ndmin=2)
+    except (FileNotFoundError, OSError) as err:
+        print ("Error in loading saved training dataset. Run generate_and_save_dataset.")
+        raise err
+
     return tf.data.Dataset.from_tensor_slices((z_s, errors))
 
-def generate_and_save_dataset(resolution, dataset_size):
+def generate_and_save_dataset(dataset_size, resolution=40):
     V = get_space(resolution)
     dofs = len(V.dofmap().dofs())
     z_s = np.random.uniform(0.1, 1, (dataset_size, dofs))
@@ -52,7 +75,8 @@ def generate_and_save_dataset(resolution, dataset_size):
 
 def create_initializable_iterator(buffer_size, batch_size):
     z_s = np.loadtxt('z_s_train.txt', delimiter=",")
-    errors = np.loadtxt('errors_train.txt', delimiter=",")
+    #  z_s = read_csv('z_s_train.txt', delimiter=",").values
+    errors = np.loadtxt('errors_train.txt', delimiter=",", ndmin=2)
 
     features_placeholder = tf.placeholder(z_s.dtype, z_s.shape)
     labels_placeholder = tf.placeholder(errors.dtype, errors.shape)
@@ -63,6 +87,9 @@ def create_initializable_iterator(buffer_size, batch_size):
 
 
 class FinInput:
+    '''
+    A class to create a thermal fin instance with Tensorflow input functions
+    '''
     def __init__(self, batch_size, resolution):
         self.resolution = resolution
         self.V = get_space(resolution)

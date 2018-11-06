@@ -53,9 +53,9 @@ for i in range(0,samples):
     Y[i,:] = w.vector()[:]
 
 K = np.dot(Y, Y.T)
+
+# Initial basis vectors computed using proper orthogonal decomposition
 e,v = np.linalg.eig(K)
-#  plt.plot(e[:10])
-#  plt.show()
 
 basis_size = 5
 U = np.zeros((basis_size, dofs))

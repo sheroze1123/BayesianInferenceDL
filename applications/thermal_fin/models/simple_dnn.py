@@ -22,13 +22,20 @@ def simple_dnn(features, labels, mode, params):
 
     dense2 = tf.layers.dense(dense1, units=num_nodes, activation=tf.nn.relu)
 
-    dense3 = tf.layers.dense(dense2, units=ceil(num_nodes/2), activation=tf.nn.relu)
+    #  dense3 = tf.layers.dense(dense2, units=ceil(num_nodes/2), activation=tf.nn.relu)
+    dense3 = tf.layers.dense(dense2, units=num_nodes, activation=tf.nn.relu)
 
-    dense4 = tf.layers.dense(dense3, units=ceil(num_nodes/4), activation=tf.nn.relu)
+    #  dense4 = tf.layers.dense(dense3, units=ceil(num_nodes/4), activation=tf.nn.relu)
+    dense4 = tf.layers.dense(dense3, units=num_nodes, activation=tf.nn.relu)
 
-    dense5 = tf.layers.dense(dense4, units=ceil(num_nodes/8), activation=tf.nn.relu)
+    dense5 = tf.layers.dense(dense4, units=num_nodes, activation=tf.nn.relu)
+    dense6 = tf.layers.dense(dense5, units=num_nodes, activation=tf.nn.relu)
+    dense7 = tf.layers.dense(dense6, units=num_nodes, activation=tf.nn.relu)
+    dense8 = tf.layers.dense(dense7, units=num_nodes, activation=tf.nn.relu)
+    dense9 = tf.layers.dense(dense8, units=num_nodes, activation=tf.nn.relu)
+    #  dense5 = tf.layers.dense(dense4, units=ceil(num_nodes/8), activation=tf.nn.relu)
 
-    logits = tf.layers.dense(inputs=dense5, units=1)
+    logits = tf.layers.dense(inputs=dense9, units=1)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=logits)
