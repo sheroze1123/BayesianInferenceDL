@@ -4,6 +4,26 @@ from dolfin import *
 from forward_solve import Fin, get_space
 from pandas import read_csv
 
+def generate_five_param(dataset_size, resolution=40):
+    V = get_space(resolution)
+    dofs = len(V.dofmap().dofs())
+
+    # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
+    z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
+    phi = np.loadtxt('basis.txt',delimiter=",")
+    solver = Fin(V)
+    errors = np.zeros((dataset_size, 1))
+
+    for i in range(dataset_size):
+        w, y, A, B, C = solver.forward_five_param(z_s[i,:])
+        psi = np.dot(A, phi)
+        A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
+        errors[i][0] = y - y_r 
+
+    dataset = tf.data.Dataset.from_tensor_slices((z_s,errors))
+
+    return dataset
+
 def generate(dataset_size, resolution=40):
     '''
     Create a tensorflow dataset where the features are thermal conductivity parameters

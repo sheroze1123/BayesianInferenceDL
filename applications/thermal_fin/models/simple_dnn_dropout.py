@@ -10,12 +10,12 @@ def simple_dnn_dropout(features, labels, mode, params):
         features - This is batch_features from input_fn
         labels   - This is batch_labels from input_fn
         mode     - An instance of tf.estimator.ModeKeys, see below
-        params   - Additional configuration
+        params   - Additional configuration (Requires batch_size, num_nodes, dropout_rate)
     '''
 
-    batch_size = tf.flags.FLAGS.batch_size
-    dropout_rate = tf.flags.FLAGS.dropout_rate
     num_nodes = params["num_nodes"]
+    batch_size = params["batch_size"]
+    dropout_rate = params["dropout_rate"]
 
     # input_layer shape = [batch_size, num_nodes]
     # -1 for batch size specifies that this dimension should be dynamically

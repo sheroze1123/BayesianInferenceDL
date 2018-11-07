@@ -8,4 +8,5 @@ Improve performance
 
 Learning ROM error
     - Architecture for regresion
-    - Precompute dataset and use shuffle
+    - Precompute dataset and use shuffle -COMPLETE-
+    - CNNs on finite element nodes

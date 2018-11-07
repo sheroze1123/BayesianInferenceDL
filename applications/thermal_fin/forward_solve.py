@@ -61,6 +61,28 @@ class Fin:
         F = inner(m * grad(self.w), grad(self.v)) * self.dx(0) + self.v * self.Bi * self.w * self.ds(1)
         return F, self.a
 
+    def five_param_to_function(self, k_s):
+        '''
+        A simpler thermal conductivity problem is the case where each fin has a constant 
+        conductivity instead of having a spatially varying conductivity. This function takes
+        in conductivity for each fin and returns a FEniCS function on the space
+
+        More info on Tan's thesis Pg. 80
+        '''
+
+        k1, k2, k3, k4, k5 = k_s
+        
+        m = interpolate(Expression("k_5 * ((x[0] >= 2.5) && (x[0] <= 3.5)) \
+                      + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+                      + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+                      + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+                      + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))",\
+                                          degree=2, k_1=k1, k_2=k2, k_3=k3, k_4=k4, k_5=k5), self.V)
+        return m
+
+    def forward_five_param(self, k_s):
+        return self.forward(self.five_param_to_function(k_s))
+
     def forward(self, m):
         '''
         Performs a forward solve to obtain temperature distribution
@@ -112,6 +134,9 @@ class Fin:
         y_r = np.dot(C_r, x_r)
 
         return A_r, B_r, C_r, x_r, y_r
+
+    def reduced_forward_no_full_5_param(self, k_s, psi, phi):
+        return self.reduced_forward_no_full(self.five_param_to_function(k_s), psi, phi)
 
     def reduced_forward_no_full(self, m, psi, phi):
         '''

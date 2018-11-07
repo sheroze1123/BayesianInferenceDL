@@ -83,7 +83,8 @@ def main(argv):
         config = config,
         model_fn=model, 
         params={"num_nodes":finInstance.dofs,
-                "learning_rate":0.01,
+                "learning_rate":1.00,
+                "batch_size":batch_size,
                 "optimizer":tf.train.AdadeltaOptimizer})
 
     regressor.train(input_fn=train_fn, steps=train_steps)
