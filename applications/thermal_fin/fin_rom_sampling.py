@@ -68,17 +68,31 @@ for i in range(basis_size):
 
 basis = U.T
 
-t_i = time.time()
 def random_initial():
+    '''
+    Currently uses a simple random initialization. 
+    Eventually replace with a more sophisticated function
+    with Bayesian prior sampling
+    '''
     z_0 = Function(V)
     z_0.vector().set_local(np.random.uniform(0.1, 10.0, dofs))
     return z_0
 
+##########################################################3
+# Create reduced basis with adaptive sampling
+##########################################################3
+
+t_i = time.time()
 basis = sample(basis, random_initial, optimize, solver)
 t_f = time.time()
 print("Sampling time taken: {}".format(t_f - t_i))
 print("Computed basis with shape {}".format(basis.shape))
 
+##########################################################3
+# Basis verification with an illustrative example
+##########################################################3
+
+# Full space solve
 m = interpolate(Expression("2*x[1] + 1.0", degree=2), V)
 w, y, A, B, C  = solver.forward(m)
 p = plot(m, title="Conductivity")
@@ -87,6 +101,8 @@ plt.show()
 p = plot(w, title="Temperature")
 plt.colorbar(p)
 plt.show()
+
+# Reduced basis solve
 A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, np.dot(A, basis), basis) 
 x_tilde = np.dot(basis, x_r)
 x_tilde_f = Function(V)
@@ -98,7 +114,7 @@ plt.show()
 print("Reduced system relative error: {}".format(np.linalg.norm(y-y_r)/np.abs(y)))
 np.savetxt("basis.txt", basis, delimiter=",")
 
-#Modify basis
+# Modify basis. The error should go to zero
 w = w.vector()[:]
 w = w.reshape(w.shape[0], 1)
 basis = enrich(basis, w)

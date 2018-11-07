@@ -1,8 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from dolfin import *
-from forward_solve import Fin
-from fin_functionspace import get_space
+from forward_solve import Fin, get_space
 from pandas import read_csv
 
 def generate(dataset_size, resolution=40):
