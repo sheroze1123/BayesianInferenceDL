@@ -1,10 +1,13 @@
+from sys import platform
+if platform == 'darwin'
+    import matplotlib
+    matplotlib.use('macosx')
 import time
-import matplotlib
-matplotlib.use('macosx')
-import matplotlib.pyplot as plt
-from dolfin import *
-import mshr
 import numpy as np
+import matplotlib.pyplot as plt
+import mshr
+from mshr import Rectangle, generate_mesh
+from dolfin import *
 from forward_solve import Fin
 from error_optimization import optimize
 from model_constr_adaptive_sampling import sample, enrich
@@ -12,17 +15,17 @@ from model_constr_adaptive_sampling import sample, enrich
 set_log_level(40)
 
 # Create a fin geometry
-geometry = mshr.Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
-        + mshr.Rectangle(Point(0.0, 0.75), Point(2.5, 1.0)) \
-        + mshr.Rectangle(Point(0.0, 1.75), Point(2.5, 2.0)) \
-        + mshr.Rectangle(Point(0.0, 2.75), Point(2.5, 3.0)) \
-        + mshr.Rectangle(Point(0.0, 3.75), Point(2.5, 4.0)) \
-        + mshr.Rectangle(Point(3.5, 0.75), Point(6.0, 1.0)) \
-        + mshr.Rectangle(Point(3.5, 1.75), Point(6.0, 2.0)) \
-        + mshr.Rectangle(Point(3.5, 2.75), Point(6.0, 3.0)) \
-        + mshr.Rectangle(Point(3.5, 3.75), Point(6.0, 4.0)) \
+geometry = Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
+        + Rectangle(Point(0.0, 0.75), Point(2.5, 1.0)) \
+        + Rectangle(Point(0.0, 1.75), Point(2.5, 2.0)) \
+        + Rectangle(Point(0.0, 2.75), Point(2.5, 3.0)) \
+        + Rectangle(Point(0.0, 3.75), Point(2.5, 4.0)) \
+        + Rectangle(Point(3.5, 0.75), Point(6.0, 1.0)) \
+        + Rectangle(Point(3.5, 1.75), Point(6.0, 2.0)) \
+        + Rectangle(Point(3.5, 2.75), Point(6.0, 3.0)) \
+        + Rectangle(Point(3.5, 3.75), Point(6.0, 4.0)) \
 
-mesh = mshr.generate_mesh(geometry, 40)
+mesh = generate_mesh(geometry, 40)
 
 V = FunctionSpace(mesh, 'CG', 1)
 dofs = len(V.dofmap().dofs())

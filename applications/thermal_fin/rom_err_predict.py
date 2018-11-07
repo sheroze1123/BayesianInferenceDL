@@ -36,12 +36,17 @@ def pred_dataset(finInstance):
 
 
 def main(argv):
-    batch_size  = tf.flags.FLAGS.batch_size
-    train_steps = tf.flags.FLAGS.train_steps
-    eval_steps  = tf.flags.FLAGS.eval_steps
-    res         = tf.flags.FLAGS.resolution
-    train_size  = tf.flags.FLAGS.train_size
-    eval_size   = tf.flags.FLAGS.eval_size
+    '''
+    Sets up inputs to the estimator and trains it. 
+    Evaluates the trained model on a validation set and performs 
+    proof of concept of prediction for a given parameter.
+    '''
+    batch_size  = 1
+    eval_size   = 100
+    eval_steps  = 100
+    res         = 40
+    train_size  = 200
+    train_steps = 200
 
     #############################################################
     # Set up input functions
@@ -53,7 +58,7 @@ def main(argv):
     # Generate test set and training set
     #  train_set = generate(train_size, res)
     train_set = load_saved_dataset()
-    test_set = generate(eval_size, res)
+    test_set = generate(eval_size, res)  # Randomly generate validation set per run
     y, y_r, error_2, pred_set = pred_dataset(finInstance)
 
     def train_fn():
@@ -77,27 +82,21 @@ def main(argv):
     regressor = tf.estimator.Estimator(
         config = config,
         model_fn=model, 
-        params={"num_nodes":finInstance.dofs})
+        params={"num_nodes":finInstance.dofs,
+                "learning_rate":0.01,
+                "optimizer":tf.train.AdadeltaOptimizer})
 
     regressor.train(input_fn=train_fn, steps=train_steps)
     #  regressor.train(input_fn=finInstance.train_input_fn, steps=train_steps)
                             #  steps=train_steps, hooks=[logging_hook])
 
     eval_result = regressor.evaluate(input_fn=eval_fn, steps=eval_steps)
-    print(eval_result)
+    print("RMSE for test set: {}".format(eval_result["rmse"]))
 
     prediction = list(regressor.predict(input_fn=pred_fn))
     print(prediction)
     print("y = {}, y_r = {}, e_pred = {}, e_true = {}".format(y, y_r, prediction[1][0], error_2))
 
 if __name__ == "__main__":
-    # The Estimator periodically generates "INFO" logs; make these logs visible.
-    tf.flags.DEFINE_integer('batch_size', 2, 'Number of images to process in a batch.')
-    tf.flags.DEFINE_float('dropout_rate', 0.5, 'Probability of dropping layer.')
-    tf.flags.DEFINE_integer('eval_size', 100, 'Number of evaluation points')
-    tf.flags.DEFINE_integer('eval_steps', 100, 'Number of evaluation steps to take.')
-    tf.flags.DEFINE_integer('resolution', 40, 'Resolution of the finite element mesh')
-    tf.flags.DEFINE_integer('train_size', 9400, 'Number of training points')
-    tf.flags.DEFINE_integer('train_steps', 9400, 'Number of training steps to take.')
-    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.logging.set_verbosity(tf.logging.WARN)
     tf.app.run(main=main)
