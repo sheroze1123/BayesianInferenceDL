@@ -25,13 +25,14 @@ def simple_dnn(features, labels, mode, params):
     dense4 = tf.layers.dense(dense3, units=20, activation=tf.nn.relu)
     dense5 = tf.layers.dense(dense4, units=20, activation=tf.nn.relu)
 
-    logits = tf.layers.dense(inputs=dense5, units=1)
+    e_pred = tf.layers.dense(inputs=dense5, units=1)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        return tf.estimator.EstimatorSpec(mode=mode, predictions=logits)
+        return tf.estimator.EstimatorSpec(mode=mode, predictions=e_pred)
     
     # Calculate Loss (for both TRAIN and EVAL modes)
-    loss = tf.losses.mean_squared_error(labels, logits)
+    #  loss = tf.losses.mean_squared_error(labels, e_pred)
+    loss = tf.losses.mean_squared_error(labels, e_pred, tf.reciprocal(tf.abs(labels)))
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -42,10 +43,10 @@ def simple_dnn(features, labels, mode, params):
     #TODO: Add variance of loss?
 
     # Calculate root mean squared error
-    rmse = tf.metrics.root_mean_squared_error(labels, logits)
+    rmse = tf.metrics.root_mean_squared_error(labels, e_pred)
 
     # Calculates relative error normalized by the real error
-    rel_err = tf.metrics.mean_relative_error(labels, logits, labels)
+    rel_err = tf.metrics.mean_relative_error(labels, e_pred, tf.abs(labels))
 
     tf.summary.scalar('relative_error', rel_err)
     tf.summary.scalar('rmse', rmse)

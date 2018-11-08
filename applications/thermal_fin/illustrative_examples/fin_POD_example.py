@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 
-if sys.platform == 'darwin'
+if sys.platform == 'darwin':
     import matplotlib
     matplotlib.use('macosx')
 

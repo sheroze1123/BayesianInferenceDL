@@ -11,6 +11,7 @@ def generate_five_param(dataset_size, resolution=40):
     # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
     z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
     phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    phi = phi[:,0:20]
     solver = Fin(V)
     errors = np.zeros((dataset_size, 1))
 

@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 
-if sys.platform == 'darwin'
+if sys.platform == 'darwin':
     import matplotlib
     matplotlib.use('macosx')
 
@@ -10,7 +10,7 @@ from dolfin import *
 from mshr import Rectangle, generate_mesh
 import numpy as np
 
-from forward_solve import forward, reduced_forward
+from forward_solve import Fin
 from error_optimization import optimize
 from model_constr_adaptive_sampling import sample
 
@@ -29,17 +29,18 @@ mesh = generate_mesh(geometry, 40)
 
 V = FunctionSpace(mesh, 'CG', 1)
 dofs = len(V.dofmap().dofs())
+f = Fin(V)
 
 basis = np.loadtxt('data/basis.txt', delimiter=",")
 m = interpolate(Expression("2*x[1] + 1.0", degree=2), V)
-w, y, A, B, C, dA_dz  = forward(m, V)
+w, y, A, B, C  = f.forward(m, V)
 p = plot(m, title="Conductivity")
 plt.colorbar(p)
 plt.show()
 p = plot(w, title="Temperature")
 plt.colorbar(p)
 plt.show()
-A_r, B_r, C_r, x_r, y_r = reduced_forward(A, B, C, np.dot(A, basis), basis) 
+A_r, B_r, C_r, x_r, y_r = f.reduced_forward(A, B, C, np.dot(A, basis), basis) 
 x_tilde = np.dot(basis, x_r)
 x_tilde_f = Function(V)
 x_tilde_f.vector().set_local(x_tilde)

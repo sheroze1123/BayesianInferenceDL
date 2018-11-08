@@ -20,7 +20,7 @@ def main(argv):
     eval_size   = 1000
     eval_steps  = 1000
     res         = 40
-    train_size  = 1000
+    train_size  = 5000
     train_steps = 5000
 
     t_i = time.time()
