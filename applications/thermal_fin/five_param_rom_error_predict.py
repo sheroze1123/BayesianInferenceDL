@@ -52,7 +52,7 @@ def main(argv):
     regressor = tf.estimator.Estimator(
                             config   = config,
                             model_fn = model,
-                            params   = {"learning_rate" : 0.10,
+                            params   = {"learning_rate" : 1.00,
                                         "batch_size"    : batch_size,
                                         "optimizer"     : tf.train.AdadeltaOptimizer})
 

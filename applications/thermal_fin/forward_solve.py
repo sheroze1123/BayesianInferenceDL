@@ -15,6 +15,7 @@ class Fin:
             V - dolfin FunctionSpace
         '''
         self.V = V
+        self.dofs = len(V.dofmap().dofs()) 
 
         # Currently uses a fixed Biot number
         self.Bi = Constant(0.1)
@@ -40,6 +41,7 @@ class Fin:
         self.a = self.v * self.dx
         self.B = assemble(self.a)[:]
         self.C, self.domain_measure = self.averaging_operator()
+        self.dz_dk_T = self.full_grad_to_five_param()
 
     def averaging_operator(self):
         '''
@@ -60,6 +62,17 @@ class Fin:
         '''
         F = inner(m * grad(self.w), grad(self.v)) * self.dx(0) + self.v * self.Bi * self.w * self.ds(1)
         return F, self.a
+
+    def full_grad_to_five_param(self):
+        dz_dk_T = np.zeros((5,self.dofs))
+
+        for i in range(5):
+            impulse = np.zeros((5,))
+            impulse[i] = 1.0
+            m = self.five_param_to_function(impulse)
+            dz_dk_T[i,:] = m.vector()[:]
+
+        return dz_dk_T
 
     def five_param_to_function(self, k_s):
         '''

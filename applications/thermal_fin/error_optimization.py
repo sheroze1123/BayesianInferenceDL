@@ -4,6 +4,37 @@ from forward_solve import Fin
 import scipy.optimize
 #  import time
 
+def gradient_five_param(k_vec, psi, phi, solver):
+    z_vec = solver.five_param_to_function(k_vec).vector()[:]
+    return solver.dz_dk_T @ gradient(z_vec, psi, phi, solver)
+
+def cost_functional_five_param(k_vec, psi, phi, solver):
+    z_vec = solver.five_param_to_function(k_vec).vector()[:]
+    return cost_functional(z_vec, psi, phi, solver)
+
+def optimize_five_param(k_0, phi, solver):
+    '''
+    Finds the parameter with the maximum ROM error given a starting point z_0
+    '''
+    w, y, A, B, C = solver.forward_five_param(k_0)
+    psi = np.dot(A, phi)
+    init_cost = -cost_functional_five_param(k_0, psi, phi, solver)
+
+    z_bounds = scipy.optimize.Bounds(0.1, 10)
+    res = scipy.optimize.minimize(cost_functional_five_param, 
+                            k_0, 
+                            args=(psi, phi, solver), 
+                            method='L-BFGS-B', 
+                            jac=gradient_five_param,
+                            options={'maxiter':200}, 
+                            bounds=z_bounds)
+
+    print("Optimizer message: {}".format(res.message))
+    print("Cost functional evaluations: {}, Opt. Iterations: {}".format(res.nfev, res.nit))
+    print("Initial G: {}, Final G: {}".format(init_cost, -res.fun))
+    z_star = solver.five_param_to_function(res.x)
+    g_z_star = -res.fun
+    return z_star, g_z_star
 
 def gradient(z_vec, psi, phi, solver):
     '''

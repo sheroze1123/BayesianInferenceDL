@@ -1,4 +1,3 @@
-from error_optimization import optimize
 import numpy as np
 import time
 
