@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import time
 import tensorflow as tf
 from dolfin import set_log_level
 from generate_fin_dataset import generate_five_param, FinInput
@@ -19,35 +20,25 @@ def main(argv):
     eval_size   = 1000
     eval_steps  = 1000
     res         = 40
-    train_size  = 5000
-    train_steps = 15000
+    train_size  = 1000
+    train_steps = 5000
 
-    #############################################################
-    # Set up input functions
-    #############################################################
+    t_i = time.time()
 
     # This class performs forward solves for the thermal fin problem
     finInstance = FinInput(batch_size, res) 
 
-    # Generate test set and training set
+    # Generate training set
     train_set = generate_five_param(train_size, res)
-    test_set = generate_five_param(eval_size, res)  
 
     def train_fn():
         return (train_set.shuffle(train_steps).batch(batch_size).repeat().make_one_shot_iterator().get_next())
-    def eval_fn():
-        return (test_set.shuffle(eval_size).batch(batch_size).repeat().make_one_shot_iterator().get_next())
-
-    # TODO Add more interesting metrics to check during evaluation time
-    #  logging_hook = tf.train.LoggingTensorHook(
-        #  tensors={"loss_c": "l2_loss"}, every_n_iter=5)
-
 
     #############################################################
-    # Set up estimator
+    # Training
     #############################################################
 
-    config = tf.estimator.RunConfig(save_summary_steps=100, model_dir='data_rom_error_five_param')
+    config = tf.estimator.RunConfig(save_summary_steps=10, model_dir='data_rom_error_five_param_new')
 
     regressor = tf.estimator.Estimator(
                             config   = config,
@@ -57,6 +48,21 @@ def main(argv):
                                         "optimizer"     : tf.train.AdadeltaOptimizer})
 
     regressor.train(input_fn=train_fn, steps=train_steps)
+
+    t_f = time.time()
+    print("Training time taken: {} sec".format(t_f - t_i))
+
+    #############################################################
+    # Testing
+    #############################################################
+
+    test_set = generate_five_param(eval_size, res)  
+    def eval_fn():
+        return (test_set.shuffle(eval_size).batch(batch_size).repeat().make_one_shot_iterator().get_next())
+
+    # TODO Add more interesting metrics to check during evaluation time
+    #  logging_hook = tf.train.LoggingTensorHook(
+        #  tensors={"loss_c": "l2_loss"}, every_n_iter=5)
 
     eval_result = regressor.evaluate(input_fn=eval_fn, steps=eval_steps)
     print("RMSE for test set: {}".format(eval_result["rmse"]))

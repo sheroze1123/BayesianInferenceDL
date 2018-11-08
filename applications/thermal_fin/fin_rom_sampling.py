@@ -112,7 +112,7 @@ plt.colorbar(p)
 plt.show()
 
 print("Reduced system relative error: {}".format(np.linalg.norm(y-y_r)/np.abs(y)))
-np.savetxt("basis.txt", basis, delimiter=",")
+np.savetxt("data/basis.txt", basis, delimiter=",")
 
 # Modify basis. The error should go to zero
 w = w.vector()[:]
@@ -128,5 +128,5 @@ plt.colorbar(p)
 plt.show()
 
 print("Reduced system relative error with added snapshot: {}".format(np.linalg.norm(y-y_r)/np.abs(y)))
-np.savetxt("basis.txt", basis, delimiter=",")
+np.savetxt("data/basis.txt", basis, delimiter=",")
 

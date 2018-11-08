@@ -10,7 +10,7 @@ def generate_five_param(dataset_size, resolution=40):
 
     # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
     z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
-    phi = np.loadtxt('basis.txt',delimiter=",")
+    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
     solver = Fin(V)
     errors = np.zeros((dataset_size, 1))
 
@@ -43,7 +43,7 @@ def generate(dataset_size, resolution=40):
 
     # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
     z_s = np.random.uniform(0.1, 1, (dataset_size, dofs))
-    phi = np.loadtxt('basis.txt',delimiter=",")
+    phi = np.loadtxt('data/basis.txt',delimiter=",")
     solver = Fin(V)
     errors = np.zeros((dataset_size, 1))
 
@@ -64,9 +64,9 @@ def load_saved_dataset():
     Loads a training dataset from disk
     '''
     try:
-        z_s = np.loadtxt('z_s_train.txt', delimiter=",")
-        #  z_s = read_csv('z_s_train.txt', delimiter=",").values  # Using pandas for performance
-        errors = np.loadtxt('errors_train.txt', delimiter=",", ndmin=2)
+        z_s = np.loadtxt('data/z_s_train.txt', delimiter=",")
+        #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values  # Using pandas for performance
+        errors = np.loadtxt('data/errors_train.txt', delimiter=",", ndmin=2)
     except (FileNotFoundError, OSError) as err:
         print ("Error in loading saved training dataset. Run generate_and_save_dataset.")
         raise err
@@ -77,7 +77,7 @@ def generate_and_save_dataset(dataset_size, resolution=40):
     V = get_space(resolution)
     dofs = len(V.dofmap().dofs())
     z_s = np.random.uniform(0.1, 1, (dataset_size, dofs))
-    phi = np.loadtxt('basis.txt',delimiter=",")
+    phi = np.loadtxt('data/basis.txt',delimiter=",")
     solver = Fin(V)
     errors = np.zeros((dataset_size, 1))
 
@@ -89,13 +89,13 @@ def generate_and_save_dataset(dataset_size, resolution=40):
         A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
         errors[i][0] = y - y_r 
 
-    np.savetxt('z_s_train.txt', z_s, delimiter=",")
-    np.savetxt('errors_train.txt', errors, delimiter=",")
+    np.savetxt('data/z_s_train.txt', z_s, delimiter=",")
+    np.savetxt('data/errors_train.txt', errors, delimiter=",")
 
 def create_initializable_iterator(buffer_size, batch_size):
-    z_s = np.loadtxt('z_s_train.txt', delimiter=",")
-    #  z_s = read_csv('z_s_train.txt', delimiter=",").values
-    errors = np.loadtxt('errors_train.txt', delimiter=",", ndmin=2)
+    z_s = np.loadtxt('data/z_s_train.txt', delimiter=",")
+    #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values
+    errors = np.loadtxt('data/errors_train.txt', delimiter=",", ndmin=2)
 
     features_placeholder = tf.placeholder(z_s.dtype, z_s.shape)
     labels_placeholder = tf.placeholder(errors.dtype, errors.shape)
@@ -113,7 +113,7 @@ class FinInput:
         self.resolution = resolution
         self.V = get_space(resolution)
         self.dofs = len(self.V.dofmap().dofs())
-        self.phi = np.loadtxt('basis.txt',delimiter=",")
+        self.phi = np.loadtxt('data/basis.txt',delimiter=",")
         self.batch_size = batch_size
         self.solver = Fin(self.V)
 

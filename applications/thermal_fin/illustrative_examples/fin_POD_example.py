@@ -1,9 +1,15 @@
-import matplotlib
-matplotlib.use('macosx')
+import sys
+sys.path.append('../')
+
+if sys.platform == 'darwin'
+    import matplotlib
+    matplotlib.use('macosx')
+
 import matplotlib.pyplot as plt
 from dolfin import *
 import mshr
 import numpy as np
+
 from forward_solve import Fin 
 
 # Create a fin geometry
