@@ -10,3 +10,6 @@ Learning ROM error
     - Architecture for regresion
     - Precompute dataset and use shuffle -COMPLETE-
     - CNNs on finite element nodes
+
+Universal Approximator Theorem
+    - Verify 5-parameter UAT (R^5 -> R continuous operator on a compact set. So increasing width should help)

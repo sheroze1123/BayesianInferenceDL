@@ -13,17 +13,19 @@ def simple_dnn(features, labels, mode, params):
     '''
 
     batch_size = params["batch_size"]
+    activation_fn = tf.nn.sigmoid
+    #  activation_fn = tf.nn.relu
 
     # input_layer shape = [batch_size, num_nodes]
     # -1 for batch size specifies that this dimension should be dynamically
-    dense1 = tf.layers.dense(features, units=20, activation=tf.nn.relu)
+    dense1 = tf.layers.dense(features, units=20, activation=activation_fn)
 
-    dense2 = tf.layers.dense(dense1, units=20, activation=tf.nn.relu)
+    dense2 = tf.layers.dense(dense1, units=20, activation=activation_fn)
 
-    #  dense3 = tf.layers.dense(dense2, units=ceil(num_nodes/2), activation=tf.nn.relu)
-    dense3 = tf.layers.dense(dense2, units=20, activation=tf.nn.relu)
-    dense4 = tf.layers.dense(dense3, units=20, activation=tf.nn.relu)
-    dense5 = tf.layers.dense(dense4, units=20, activation=tf.nn.relu)
+    #  dense3 = tf.layers.dense(dense2, units=ceil(num_nodes/2), activation=activation_fn)
+    dense3 = tf.layers.dense(dense2, units=20, activation=activation_fn)
+    dense4 = tf.layers.dense(dense3, units=20, activation=activation_fn)
+    dense5 = tf.layers.dense(dense4, units=20, activation=activation_fn)
 
     e_pred = tf.layers.dense(inputs=dense5, units=1)
 
