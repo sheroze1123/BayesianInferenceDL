@@ -1,5 +1,5 @@
 from sys import platform
-if platform == 'darwin'
+if platform == 'darwin':
     import matplotlib
     matplotlib.use('macosx')
 import time

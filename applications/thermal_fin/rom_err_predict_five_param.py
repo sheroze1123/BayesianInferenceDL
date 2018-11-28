@@ -5,7 +5,7 @@ from __future__ import print_function
 import time
 import tensorflow as tf
 from dolfin import set_log_level
-from generate_fin_dataset import generate_five_param, FinInput
+from generate_fin_dataset import generate_five_param, FinInput, load_eval_dataset
 from models.simple_dnn_five_param import simple_dnn as model
 
 set_log_level(40)
@@ -17,11 +17,11 @@ def main(argv):
     the RMSE.
     '''
     batch_size  = 10
-    eval_size   = 1000
-    eval_steps  = 1000
+    eval_size   = 100
+    eval_steps  = 100
     res         = 40
-    train_size  = 3500
-    train_steps = 3500
+    train_size  = 9500
+    train_steps = 9500
 
     t_i = time.time()
 
@@ -32,7 +32,7 @@ def main(argv):
     train_set = generate_five_param(train_size, res)
 
     def train_fn():
-        return (train_set.shuffle(train_steps).batch(batch_size).repeat().make_one_shot_iterator().get_next())
+        return (train_set.shuffle(train_steps).batch(batch_size).repeat(10).make_one_shot_iterator().get_next())
 
     #############################################################
     # Training
@@ -40,12 +40,14 @@ def main(argv):
 
     config = tf.estimator.RunConfig(save_summary_steps=10, model_dir='data_rom_error_five_param_new')
 
-    regressor = tf.estimator.Estimator(
-                            config   = config,
-                            model_fn = model,
-                            params   = {"learning_rate" : 1.00,
-                                        "batch_size"    : batch_size,
-                                        "optimizer"     : tf.train.AdadeltaOptimizer})
+    #  params   = {"learning_rate" : 1.00,
+                #  "batch_size"    : batch_size,
+                #  "optimizer"     : tf.train.AdadeltaOptimizer}
+    params   = {"learning_rate" : 0.001,
+                "batch_size"    : batch_size,
+                "optimizer"     : tf.train.AdamOptimizer}
+
+    regressor = tf.estimator.Estimator(config = config, model_fn = model, params = params)
 
     regressor.train(input_fn=train_fn, steps=train_steps)
 
@@ -56,7 +58,8 @@ def main(argv):
     # Testing
     #############################################################
 
-    test_set = generate_five_param(eval_size, res)  
+    #  test_set = generate_five_param(eval_size, res)  
+    test_set = load_eval_dataset()
     def eval_fn():
         return (test_set.shuffle(eval_size).batch(batch_size).repeat().make_one_shot_iterator().get_next())
 

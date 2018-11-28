@@ -66,4 +66,4 @@ t_f = time.time()
 print("Sampling time taken: {}".format(t_f - t_i))
 print("Computed basis with shape {}".format(basis.shape))
 
-np.savetxt("basis_five_param.txt", basis, delimiter=",")
+np.savetxt("data/basis_five_param.txt", basis, delimiter=",")

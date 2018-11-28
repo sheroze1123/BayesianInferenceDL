@@ -21,6 +21,8 @@ def generate_five_param(dataset_size, resolution=40):
         A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
         errors[i][0] = y - y_r 
 
+    np.savetxt('data/z_s_eval.txt', z_s, delimiter=",")
+    np.savetxt('data/errors_eval.txt', errors, delimiter=",")
     dataset = tf.data.Dataset.from_tensor_slices((z_s,errors))
 
     return dataset
@@ -59,6 +61,21 @@ def generate(dataset_size, resolution=40):
     dataset = tf.data.Dataset.from_tensor_slices((z_s,errors))
 
     return dataset
+
+def load_eval_dataset():
+    '''
+    Loads a validation dataset from disk
+    '''
+    try:
+        z_s = np.loadtxt('data/z_s_eval.txt', delimiter=",")
+        #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values  # Using pandas for performance
+        errors = np.loadtxt('data/errors_eval.txt', delimiter=",", ndmin=2)
+    except (FileNotFoundError, OSError) as err:
+        print ("Error in loading saved training dataset. Run generate_and_save_dataset.")
+        raise err
+
+    return tf.data.Dataset.from_tensor_slices((z_s, errors))
+    
 
 def load_saved_dataset():
     '''
@@ -114,7 +131,7 @@ class FinInput:
         self.resolution = resolution
         self.V = get_space(resolution)
         self.dofs = len(self.V.dofmap().dofs())
-        self.phi = np.loadtxt('data/basis.txt',delimiter=",")
+        self.phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
         self.batch_size = batch_size
         self.solver = Fin(self.V)
 

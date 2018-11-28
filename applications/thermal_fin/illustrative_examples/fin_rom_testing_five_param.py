@@ -32,6 +32,7 @@ dofs = len(V.dofmap().dofs())
 f = Fin(V)
 
 basis = np.loadtxt('../data/basis_five_param.txt', delimiter=",")
+basis = basis[:,0:10]
 k_s = np.random.uniform(0.1, 1.0, 5)
 w, y, A, B, C  = f.forward_five_param(k_s)
 m = f.five_param_to_function(k_s)
@@ -50,3 +51,7 @@ plt.colorbar(p)
 plt.show()
 
 print("Reduced system error: {}".format(np.linalg.norm(y-y_r)))
+e, v = np.linalg.eig(np.dot(basis.T, basis))
+plt.semilogy(e)
+plt.show()
+

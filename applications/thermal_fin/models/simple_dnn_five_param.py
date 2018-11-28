@@ -27,15 +27,17 @@ def simple_dnn(features, labels, mode, params):
     dense3 = tf.layers.dense(dense2, units=layer_width, activation=activation_fn)
     dense4 = tf.layers.dense(dense3, units=layer_width, activation=activation_fn)
     dense5 = tf.layers.dense(dense4, units=layer_width, activation=activation_fn)
+    dense6 = tf.layers.dense(dense5, units=layer_width, activation=activation_fn)
+    dense7 = tf.layers.dense(dense6, units=layer_width, activation=activation_fn)
 
-    e_pred = tf.layers.dense(inputs=dense5, units=1)
+    e_pred = tf.layers.dense(inputs=dense7, units=1)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=e_pred)
     
     # Calculate Loss (for both TRAIN and EVAL modes)
-    #  loss = tf.losses.mean_squared_error(labels, e_pred)
-    loss = tf.losses.mean_squared_error(labels, e_pred, tf.reciprocal(tf.abs(labels)))
+    loss = tf.losses.mean_squared_error(labels, e_pred)
+    #  loss = tf.losses.mean_squared_error(labels, e_pred, tf.reciprocal(tf.abs(labels)))
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
