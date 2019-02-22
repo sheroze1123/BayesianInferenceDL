@@ -4,7 +4,8 @@
 distribution in a thermal fin given conductivity.
 - The reduced order model attempts to simplify the complexity of the forward problem by projecting
 state space to a reduced basis. An adaptive model-constrained sampling method is used to discover
-a reduced basis. More information about this algorithm can be found in Prof. Tan Bui's Ph.D. [thesis.](http://users.ices.utexas.edu/~tanbui/PublishedPapers/TanBuiPhDthesis.pdf)
+a reduced basis. More information about this algorithm can be found in Prof. Tan Bui's Ph.D. 
+[thesis.](http://users.ices.utexas.edu/~tanbui/PublishedPapers/TanBuiPhDthesis.pdf)
 - Although this reduced order model improves on computational complexity, it introduces errors compared to 
 the high fidelity forward solve done using finite element methods. 
 - The goal of this research project is to capture this nonlinear error introduced by the reduced order models

@@ -11,6 +11,29 @@ def generate_five_param(dataset_size, resolution=40):
     # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
     z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
     phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    phi = phi[:,0:20]
+    solver = Fin(V)
+    errors = np.zeros((dataset_size, 1))
+
+    for i in range(dataset_size):
+        w, y, A, B, C = solver.forward_five_param(z_s[i,:])
+        psi = np.dot(A, phi)
+        A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
+        errors[i][0] = y - y_r 
+
+    #  np.savetxt('data/z_s_eval.txt', z_s, delimiter=",")
+    #  np.savetxt('data/errors_eval.txt', errors, delimiter=",")
+    dataset = tf.data.Dataset.from_tensor_slices((z_s,errors))
+
+    return dataset
+
+def generate_five_param_np(dataset_size, resolution=40):
+    V = get_space(resolution)
+    dofs = len(V.dofmap().dofs())
+
+    # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
+    z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
+    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
     phi = phi[:,0:10]
     solver = Fin(V)
     errors = np.zeros((dataset_size, 1))
@@ -21,11 +44,8 @@ def generate_five_param(dataset_size, resolution=40):
         A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
         errors[i][0] = y - y_r 
 
-    np.savetxt('data/z_s_eval.txt', z_s, delimiter=",")
-    np.savetxt('data/errors_eval.txt', errors, delimiter=",")
-    dataset = tf.data.Dataset.from_tensor_slices((z_s,errors))
+    return (z_s, errors)
 
-    return dataset
 
 def generate(dataset_size, resolution=40):
     '''
