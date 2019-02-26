@@ -21,6 +21,8 @@ class ROM_forward(mm.PyModPiece):
         V = get_space(resolution)
         dofs = len(V.dofmap().dofs())
         self.solver = Fin(V)
+        self.phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+        self.phi = self.phi[:,0:10]
             
     def EvaluateImpl(self, inputs):
         """
@@ -28,7 +30,7 @@ class ROM_forward(mm.PyModPiece):
         
         """
         z = inputs[0]
-        A_r, B_r, C_r, x_r, y_r = self.solver.reduced_forward_no_full_5_param(z, phi)
+        A_r, B_r, C_r, x_r, y_r = self.solver.reduced_forward_no_full_5_param(z, self.phi)
         self.outputs = [y_r]
 
 class DL_ROM_forward(mm.PyModPiece):
@@ -47,6 +49,8 @@ class DL_ROM_forward(mm.PyModPiece):
         V = get_space(resolution)
         dofs = len(V.dofmap().dofs())
         self.solver = Fin(V)
+        self.phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+        self.phi = self.phi[:,0:10]
         self.model = load_parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
         
     def EvaluateImpl(self, inputs):
@@ -56,6 +60,6 @@ class DL_ROM_forward(mm.PyModPiece):
         """
         z = inputs[0]
         print(z.shape)
-        A_r, B_r, C_r, x_r, y_r = solver.reduced_forward_no_full_5_param(z, phi)
+        A_r, B_r, C_r, x_r, y_r = solver.reduced_forward_no_full_5_param(z, self.phi)
         e_NN = self.model.predict(z.reshape((1,5)))
         self.outputs = [y_r + e_NN[0,0]]
