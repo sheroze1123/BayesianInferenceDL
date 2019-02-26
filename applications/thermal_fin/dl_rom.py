@@ -13,7 +13,7 @@ def load_parametric_model(activation,
 
     if os.path.isfile('data/keras_model.index'):
         print ("Keras model weights loaded")
-        model.load_weights('./keras_model')
+        model.load_weights('data/keras_model')
     else: 
         print ("Keras model not found!")
 
