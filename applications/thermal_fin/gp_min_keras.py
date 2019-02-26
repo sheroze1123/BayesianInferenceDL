@@ -3,6 +3,9 @@ from sys import platform
 if platform == "darwin":
     import matplotlib
     matplotlib.use('macosx')
+elif platform == "linux2" or platform == "linux":
+    import matplotlib
+    matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
