@@ -1,9 +1,8 @@
 import numpy as np
-
+import dolfin as dl
 import logging
 logging.getLogger('FFC').setLevel(logging.ERROR)
 logging.getLogger('UFC').setLevel(logging.ERROR)
-import dolfin as dl
 dl.set_log_level(40)
 
 # MUQ Includes
