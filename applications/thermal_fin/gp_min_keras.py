@@ -45,7 +45,22 @@ def parametric_model(activation, optimizer, lr, n_hidden_layers, n_weights, batc
     plt.ylabel('Error in average temperature y - y_r', fontsize=14)
     plt.xlabel('Validation dataset index', fontsize=14)
     plt.show()
-    return vmape
+    return vmape, model
+
+def load_parametric_model(activation, 
+        optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs):
+
+    model = Sequential()
+    for i in range(n_hidden_layers):
+        model.add(Dense(n_weights, activation=activation))
+    model.add(Dense(1))
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+
+    if os.path.isfile('data/keras_model.index'):
+        print ("Keras model weights loaded")
+        model.load_weights('./keras_model')
+
+    return model
 
 @use_named_args(space)
 def objective(**params):
@@ -64,10 +79,7 @@ def objective(**params):
    #  Num. Epochs: {}'''.format(*res_gp.x))
 
 
-#  if os.path.isfile('data/keras_model.index'):
-    #  print ("Keras model weights loaded")
-    #  model.load_weights('./keras_model')
 #  vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-#  model.save_weights('data/keras_model')
+vmape, model = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
+model.save_weights('data/keras_model')
 print ('\nError: {:2.3f}%'.format(vmape))
