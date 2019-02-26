@@ -14,9 +14,9 @@ import pymuqModeling as mm # Needed for Gaussian distribution
 import pymuqApproximation as ma # Needed for Gaussian processes
 import pymuqSamplingAlgorithms as ms # Needed for MCMC
 
-
-r_fwd = ROM_forward(40)
-d_fwd = DL_ROM_forward(40)
+resolution = 40
+r_fwd = ROM_forward(resolution)
+d_fwd = DL_ROM_forward(resolution)
 
 z_true = np.random.uniform(0.1,1, (1,5))
 print ("z_true: {}".format(z_true))
