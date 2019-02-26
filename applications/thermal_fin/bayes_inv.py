@@ -1,9 +1,11 @@
 import numpy as np
-import dolfin as dl
 import logging
 logging.getLogger('FFC').setLevel(logging.ERROR)
 logging.getLogger('UFC').setLevel(logging.ERROR)
+import dolfin as dl
 dl.set_log_level(40)
+from forward_solve import Fin, get_space
+from bayesinv_five_param import ROM_forward, DL_ROM_forward
 
 # MUQ Includes
 import sys
@@ -12,10 +14,6 @@ import pymuqModeling as mm # Needed for Gaussian distribution
 import pymuqApproximation as ma # Needed for Gaussian processes
 import pymuqSamplingAlgorithms as ms # Needed for MCMC
 
-from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
-from forward_solve import Fin, get_space
-
-from bayesinv_five_param import ROM_forward, DL_ROM_forward
 
 r_fwd = ROM_forward(40)
 d_fwd = DL_ROM_forward(40)
