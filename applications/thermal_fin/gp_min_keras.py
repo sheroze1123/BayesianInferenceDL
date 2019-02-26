@@ -1,6 +1,8 @@
 import os
-import matplotlib
-matplotlib.use('macosx')
+from sys import platform
+if platform == "darwin":
+    import matplotlib
+    matplotlib.use('macosx')
 import matplotlib.pyplot as plt
 from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
