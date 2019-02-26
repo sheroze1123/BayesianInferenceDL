@@ -4,6 +4,7 @@ if platform == "darwin":
     import matplotlib
     matplotlib.use('macosx')
 import matplotlib.pyplot as plt
+import numpy as np
 from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from tensorflow.keras.layers import Dropout, Dense
@@ -14,7 +15,11 @@ from skopt.utils import use_named_args
 from skopt import gp_minimize
 
 (z_train, errors_train) = generate_five_param_np(4000)
+np.savetxt('data/z_train_np.txt', z_train, delimiter=',')
+np.savetxt('data/errors_train_np.txt', errors_train, delimiter=',')
 (z_val, errors_val) = generate_five_param_np(200)
+np.savetxt('data/z_val_np.txt', z_val, delimiter=',')
+np.savetxt('data/errors_val_np.txt', errors_val, delimiter=',')
 
 space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
          Categorical([Adam, RMSprop, Adadelta], name='optimizer'),
@@ -68,6 +73,6 @@ def objective(**params):
 
 
 #  vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-vmape, model = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-model.save_weights('data/keras_model')
-print ('\nError: {:2.3f}%'.format(vmape))
+#  vmape, model = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
+#  model.save_weights('data/keras_model')
+#  print ('\nError: {:2.3f}%'.format(vmape))
