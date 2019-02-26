@@ -159,7 +159,7 @@ class Fin:
         A = assemble(F).array()
         psi = np.dot(A, phi)
 
-        return reduced_forward(A, self.B,self.C, psi, phi)
+        return self.reduced_forward(A, self.B,self.C, psi, phi)
 
 
 def get_space(resolution):

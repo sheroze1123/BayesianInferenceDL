@@ -23,8 +23,8 @@ print ("z_true: {}".format(z_true))
 
 V = get_space(resolution)
 full_solver = Fin(V)
-w, y, A, B, C = solver.forward_five_param(z_true)
-obsData = y
+w, y, A, B, C = full_solver.forward_five_param(z_true[0,:])
+obsData = np.array([y])
 
 # Define prior
 logPriorMu = 0.5*np.ones(5)
