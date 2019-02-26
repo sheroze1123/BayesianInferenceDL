@@ -148,15 +148,16 @@ class Fin:
 
         return A_r, B_r, C_r, x_r, y_r
 
-    def reduced_forward_no_full_5_param(self, k_s, psi, phi):
-        return self.reduced_forward_no_full(self.five_param_to_function(k_s), psi, phi)
+    def reduced_forward_no_full_5_param(self, k_s, phi):
+        return self.reduced_forward_no_full(self.five_param_to_function(k_s), phi)
 
-    def reduced_forward_no_full(self, m, psi, phi):
+    def reduced_forward_no_full(self, m, phi):
         '''
         Solves the reduced system without solving the full system
         '''
         F, a = self.get_weak_forms(m)
         A = assemble(F).array()
+        psi = np.dot(A, phi)
 
         return reduced_forward(A, self.B,self.C, psi, phi)
 
