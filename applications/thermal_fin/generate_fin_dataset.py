@@ -37,13 +37,22 @@ def generate_five_param_np(dataset_size, resolution=40):
     phi = phi[:,0:10]
     solver = Fin(V)
     errors = np.zeros((dataset_size, 1))
+    y_s = np.zeros((dataset_size, 1))
+    y_r_s = np.zeros((dataset_size, 1))
+
 
     for i in range(dataset_size):
         w, y, A, B, C = solver.forward_five_param(z_s[i,:])
+        y_s[i][0] = y
         psi = np.dot(A, phi)
         A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
+        y_r_s[i][0] = y_r
         errors[i][0] = y - y_r 
 
+
+    np.savetxt('data/z_v.txt', z_s, delimiter=',')
+    np.savetxt('data/y_s.txt', y_s, delimiter=',')
+    np.savetxt('data/y_r_s.txt', y_r_s, delimiter=',')
     return (z_s, errors)
 
 
