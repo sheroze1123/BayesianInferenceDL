@@ -60,8 +60,7 @@ class DL_ROM_forward(mm.PyModPiece):
         
         """
         z = inputs[0]
-        print(z.shape)
-        A_r, B_r, C_r, x_r, y_r = solver.reduced_forward_no_full_5_param(z, self.phi)
+        A_r, B_r, C_r, x_r, y_r = self.solver.reduced_forward_no_full_5_param(z, self.phi)
         e_NN = self.model.predict(z.reshape((1,5)))
         output = np.array([y_r + e_NN[0,0]])
         self.outputs = [output]
