@@ -18,16 +18,16 @@ from skopt.utils import use_named_args
 from skopt import gp_minimize
 from skopt.plots import plot_convergence
 
-#  (z_train, errors_train) = generate_five_param_np(4000)
-#  np.savetxt('data/z_train_np.txt', z_train, delimiter=',')
-#  np.savetxt('data/errors_train_np.txt', errors_train, delimiter=',')
-z_train = np.loadtxt('data/z_train_np.txt', delimiter=',')
-errors_train =  np.loadtxt('data/errors_train_np.txt', delimiter=',')
-#  (z_val, errors_val) = generate_five_param_np(200)
-#  np.savetxt('data/z_val_np.txt', z_val, delimiter=',')
-#  np.savetxt('data/errors_val_np.txt', errors_val, delimiter=',')
-z_val = np.loadtxt('data/z_val_np.txt', delimiter=',')
-errors_val =  np.loadtxt('data/errors_val_np.txt', delimiter=',')
+(z_train, errors_train) = generate_five_param_np(4000)
+np.savetxt('data/z_train_np.txt', z_train, delimiter=',')
+np.savetxt('data/errors_train_np.txt', errors_train, delimiter=',')
+#  z_train = np.loadtxt('data/z_train_np.txt', delimiter=',')
+#  errors_train =  np.loadtxt('data/errors_train_np.txt', delimiter=',')
+(z_val, errors_val) = generate_five_param_np(200)
+np.savetxt('data/z_val_np.txt', z_val, delimiter=',')
+np.savetxt('data/errors_val_np.txt', errors_val, delimiter=',')
+#  z_val = np.loadtxt('data/z_val_np.txt', delimiter=',')
+#  errors_val =  np.loadtxt('data/errors_val_np.txt', delimiter=',')
 
 space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
          Categorical([Adam, RMSprop, Adadelta], name='optimizer'),
