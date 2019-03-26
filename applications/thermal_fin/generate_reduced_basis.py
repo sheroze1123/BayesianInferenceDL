@@ -1,7 +1,3 @@
-from sys import platform
-if platform == 'darwin':
-    import matplotlib
-    matplotlib.use('macosx')
 import time
 import numpy as np
 import matplotlib.pyplot as plt

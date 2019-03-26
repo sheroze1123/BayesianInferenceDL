@@ -29,9 +29,6 @@ def generate_five_param(dataset_size, resolution=40):
 
 def generate_five_param_np(dataset_size, resolution=40):
     V = get_space(resolution)
-    dofs = len(V.dofmap().dofs())
-
-    # TODO: Improve this by using mass matrix covariance. Bayesian prior may work well too
     z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
     phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
     phi = phi[:,0:10]
@@ -39,7 +36,6 @@ def generate_five_param_np(dataset_size, resolution=40):
     errors = np.zeros((dataset_size, 1))
     y_s = np.zeros((dataset_size, 1))
     y_r_s = np.zeros((dataset_size, 1))
-
 
     for i in range(dataset_size):
         w, y, A, B, C = solver.forward_five_param(z_s[i,:])
@@ -49,18 +45,33 @@ def generate_five_param_np(dataset_size, resolution=40):
         y_r_s[i][0] = y_r
         errors[i][0] = y - y_r 
 
-
-    np.savetxt('data/z_v.txt', z_s, delimiter=',')
-    np.savetxt('data/y_s.txt', y_s, delimiter=',')
-    np.savetxt('data/y_r_s.txt', y_r_s, delimiter=',')
     return (z_s, errors)
 
+def gen_five_param_subfin_avg(dataset_size, resolution=40):
+    V = get_space(resolution)
+    z_s = np.random.uniform(0.1, 1, (dataset_size, 5))
+    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    phi = phi[:,0:10]
+    solver = Fin(V)
+    errors = np.zeros((dataset_size, 5))
+    avgs = np.zeros((dataset_size, 5))
+    avgs_r = np.zeros((dataset_size, 5))
+    
+    for i in range(dataset_size):
+        w, y, A, B, C = solver.forward_five_param(z_s[i,:])
+        avgs[i] = solver.qoi_operator(w)
+        psi = np.dot(A, phi)
+        A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
+        avgs_r[i] = solver.reduced_qoi_operator(x_r)
+        errors[i] = avgs[i] - avgs_r[i]
+
+    return (z_s, errors)
 
 def generate(dataset_size, resolution=40):
     '''
     Create a tensorflow dataset where the features are thermal conductivity parameters
-    and the labels are the differences in the quantity of interest between the high fidelity model
-    and the reduced order model (this is the ROM error)
+    and the labels are the differences in the quantity of interest between the high 
+    fidelity model and the reduced order model (this is the ROM error)
 
     Arguments: 
         dataset_size - number of feature-label pairs
@@ -97,7 +108,7 @@ def load_eval_dataset():
     '''
     try:
         z_s = np.loadtxt('data/z_s_eval.txt', delimiter=",")
-        #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values  # Using pandas for performance
+        #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values 
         errors = np.loadtxt('data/errors_eval.txt', delimiter=",", ndmin=2)
     except (FileNotFoundError, OSError) as err:
         print ("Error in loading saved training dataset. Run generate_and_save_dataset.")
@@ -112,7 +123,7 @@ def load_saved_dataset():
     '''
     try:
         z_s = np.loadtxt('data/z_s_train.txt', delimiter=",")
-        #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values  # Using pandas for performance
+        #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values 
         errors = np.loadtxt('data/errors_train.txt', delimiter=",", ndmin=2)
     except (FileNotFoundError, OSError) as err:
         print ("Error in loading saved training dataset. Run generate_and_save_dataset.")

@@ -1,10 +1,5 @@
 import sys
 sys.path.append('../')
-
-if sys.platform == 'darwin':
-    import matplotlib
-    matplotlib.use('macosx')
-
 import matplotlib.pyplot as plt
 from dolfin import *
 from mshr import Rectangle, generate_mesh

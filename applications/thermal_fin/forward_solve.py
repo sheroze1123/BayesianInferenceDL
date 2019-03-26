@@ -14,6 +14,9 @@ class Fin:
         Arguments:
             V - dolfin FunctionSpace
         '''
+
+        self.phi = None
+
         self.V = V
         self.dofs = len(V.dofmap().dofs()) 
 
@@ -43,6 +46,10 @@ class Fin:
         self.C, self.domain_measure = self.averaging_operator()
         self.dz_dk_T = self.full_grad_to_five_param()
 
+        # Random sampling state for inverse problems
+        self.n_samples = 3
+        self.samp_idx = np.random.randint(0, self.dofs, self.n_samples)    
+
     def averaging_operator(self):
         '''
         Returns an operator that when applied to a function in V, gives the average.
@@ -55,12 +62,47 @@ class Fin:
         C = C[:]
         return C, domain_measure
 
+    def qoi_operator(self, z):
+        '''
+        Returns the quantities of interest given the state variable
+        '''
+        #  average = assemble(z * self.dx)/self.domain_measure
+
+        #  z_vec = z.vector()[:] #TODO: Very inefficient
+        #  rand_sample = z_vec[self.samp_idx]
+
+        #TODO: External surface sampling. Most physically realistic
+
+        # Subfin averages
+        middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=2)
+        fin1 = Expression("(((x[1] >=0.75) && (x[1] <= 1.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        fin2 = Expression("(((x[1] >=1.75) && (x[1] <= 2.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        fin3 = Expression("(((x[1] >=2.75) && (x[1] <= 3.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        fin4 = Expression("(((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+
+        middle_avg = assemble(middle * z * self.dx)
+        fin1_avg = assemble(fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
+        fin2_avg = assemble(fin2 * z * self.dx)/0.25 
+        fin3_avg = assemble(fin3 * z * self.dx)/0.25 
+        fin4_avg = assemble(fin4 * z * self.dx)/0.25 
+
+        subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
+
+        return subfin_avgs
+
+    def reduced_qoi_operator(self, z_r):
+        z_nodal_vals = np.dot(self.phi, z_r)
+        z_tilde = Function(self.V)
+        z_tilde.vector().set_local(z_nodal_vals)
+        return self.qoi_operator(z_tilde)
+
     def get_weak_forms(self, m):
         '''
         Given the parameter vector m, returns the bilinear form corresponding to
         the thermal fin heat conduction problem
         '''
-        F = inner(m * grad(self.w), grad(self.v)) * self.dx(0) + self.v * self.Bi * self.w * self.ds(1)
+        F = inner(m * grad(self.w), grad(self.v)) * self.dx(0) + \
+            self.v * self.Bi * self.w * self.ds(1)
         return F, self.a
 
     def full_grad_to_five_param(self):
@@ -86,11 +128,11 @@ class Fin:
         k1, k2, k3, k4, k5 = k_s
         
         m = interpolate(Expression("k_5 * ((x[0] >= 2.5) && (x[0] <= 3.5)) \
-                      + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-                      + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-                      + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-                      + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))",\
-                                          degree=2, k_1=k1, k_2=k2, k_3=k3, k_4=k4, k_5=k5), self.V)
+           + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+           + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+           + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+           + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))",\
+                  degree=2, k_1=k1, k_2=k2, k_3=k3, k_4=k4, k_5=k5), self.V)
         return m
 
     def forward_five_param(self, k_s):
@@ -138,6 +180,8 @@ class Fin:
             x_r - Reduced state variable
             y_r - Reduced QoI
         '''
+
+        self.phi = phi
         A_r = np.dot(psi.T, np.dot(A, phi))
         B_r = np.dot(psi.T, B)
         C_r = np.dot(C, phi)
