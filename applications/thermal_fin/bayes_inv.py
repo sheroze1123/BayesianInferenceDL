@@ -5,7 +5,7 @@ logging.getLogger('UFC').setLevel(logging.ERROR)
 import dolfin as dl
 dl.set_log_level(40)
 from forward_solve import Fin, get_space
-from bayesinv_five_param import ROM_forward, DL_ROM_forward
+from muq_mod_five_param import ROM_forward, DL_ROM_forward
 
 # MUQ Includes
 import sys
@@ -15,15 +15,16 @@ import pymuqApproximation as ma # Needed for Gaussian processes
 import pymuqSamplingAlgorithms as ms # Needed for MCMC
 
 resolution = 40
-r_fwd = ROM_forward(resolution)
-d_fwd = DL_ROM_forward(resolution)
+r_fwd = ROM_forward(resolution, out_type="fom")
+d_fwd = DL_ROM_forward(resolution, out_type="subfin_avg")
 
 z_true = np.random.uniform(0.1,1, (1,5))
 
 V = get_space(resolution)
 full_solver = Fin(V)
 w, y, A, B, C = full_solver.forward_five_param(z_true[0,:])
-obsData = np.array([y])
+qoi = full_solver.qoi_operator(w)
+obsData = np.array([qoi])
 
 def MCMC_sample(fwd):
     # Define prior

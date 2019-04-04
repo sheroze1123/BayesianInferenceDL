@@ -192,10 +192,10 @@ class Fin:
 
         return A_r, B_r, C_r, x_r, y_r
 
-    def reduced_forward_no_full_5_param(self, k_s, phi):
-        return self.reduced_forward_no_full(self.five_param_to_function(k_s), phi)
+    def r_fwd_no_full_5_param(self, k_s, phi):
+        return self.r_fwd_no_full(self.five_param_to_function(k_s), phi)
 
-    def reduced_forward_no_full(self, m, phi):
+    def r_fwd_no_full(self, m, phi):
         '''
         Solves the reduced system without solving the full system
         '''
