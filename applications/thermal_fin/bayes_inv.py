@@ -35,7 +35,7 @@ def MCMC_sample(fwd):
 
     # Likelihood
     noiseVar = 1e-4
-    noiseCov = noiseVar*np.eye(1)
+    noiseCov = noiseVar*np.eye(obsData.size)
     likelihood = mm.Gaussian(obsData, noiseCov).AsDensity()
 
     # Posterior
