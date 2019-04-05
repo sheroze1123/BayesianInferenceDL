@@ -8,7 +8,7 @@ def load_parametric_model(activation,
     model = Sequential()
     for i in range(n_hidden_layers):
         model.add(Dense(n_weights, activation=activation))
-    model.add(Dense(1))
+    model.add(Dense(5))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
 
     if os.path.isfile('data/keras_model.index'):

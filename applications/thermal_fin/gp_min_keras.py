@@ -64,7 +64,7 @@ def parametric_model(activation, optimizer, lr, n_hidden_layers, n_weights, batc
     model = Sequential()
     for i in range(n_hidden_layers):
         model.add(Dense(n_weights, activation=activation))
-    model.add(Dense(1))
+    model.add(Dense(5))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
     history = model.fit(z_train, errors_train, epochs=n_epochs, batch_size=batch_size,
             validation_data=(z_val, errors_val))
@@ -83,30 +83,29 @@ def parametric_model(activation, optimizer, lr, n_hidden_layers, n_weights, batc
     #  plt.ylabel('Error in average temperature y - y_r', fontsize=14)
     #  plt.xlabel('Validation dataset index', fontsize=14)
     #  plt.show()
-    return vmape
+    return vmape, model
 
 
 @use_named_args(space)
 def objective(**params):
     return parametric_model(**params)
 
-res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
+#res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
 
-print("Best score: {}".format(res_gp.fun))
-print('''Best parameters:\n
-   Activation function: {}
-   Optimizer: {}
-   Learning rate: {}
-   Num. hidden Layers: {}
-   Num. weights: {}
-   Batch size: {}
-   Num. Epochs: {}'''.format(*res_gp.x))
+#print("Best score: {}".format(res_gp.fun))
+#print('''Best parameters:\n
+#   Activation function: {}
+#   Optimizer: {}
+#   Learning rate: {}
+#   Num. hidden Layers: {}
+#   Num. weights: {}
+#   Batch size: {}
+#   Num. Epochs: {}'''.format(*res_gp.x))
 
-plot_convergence(res_gp)
-plt.savefig('plots/res_gp_conv.png')
+#plot_convergence(res_gp)
+#plt.savefig('plots/res_gp_conv.png')
 
-
-#  vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-#  vmape, model = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-#  model.save_weights('data/keras_model')
-#  print ('\nError: {:2.3f}%'.format(vmape))
+#vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
+vmape, model = parametric_model('relu', Adam, 0.004, 5, 50, 150, 400)
+model.save_weights('data/keras_model')
+print ('\nError: {:2.3f}%'.format(vmape))
