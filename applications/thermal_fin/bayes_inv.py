@@ -19,7 +19,8 @@ r_fwd = ROM_forward(resolution, out_type="subfin_avg")
 d_fwd = DL_ROM_forward(resolution, out_type="subfin_avg")
 f_fwd = FOM_forward(resolution, out_type="subfin_avg")
 
-z_true = np.random.uniform(0.1,1, (1,5))
+#z_true = np.random.uniform(0.1,1, (1,5))
+z_true = np.array([[0.41126864, 0.61789679, 0.75873243, 0.96527541, 0.22348076]])
 
 V = get_space(resolution)
 full_solver = Fin(V)
@@ -102,6 +103,6 @@ def MCMC_sample(fwd):
     mcErr = np.sqrt( samps.Variance() / ess)
     print('\nEstimated MC error in mean = \n', mcErr)
 
-#MCMC_sample(f_fwd)
+MCMC_sample(f_fwd)
 #MCMC_sample(r_fwd)
-MCMC_sample(d_fwd)
+#MCMC_sample(d_fwd)

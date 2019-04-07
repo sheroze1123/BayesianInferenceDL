@@ -104,7 +104,7 @@ class DL_ROM_forward(mm.PyModPiece):
         self.solver = Fin(V)
         self.phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
         self.phi = self.phi[:,0:10]
-        self.model = load_parametric_model('relu', Adadelta, 0.0001, 1, 10, 200, 400)
+        self.model = load_parametric_model('relu', Adam, 0.004, 6, 50, 150, 600)
 
         self.out_type=out_type
 

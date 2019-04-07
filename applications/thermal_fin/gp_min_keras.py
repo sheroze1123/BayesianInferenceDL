@@ -62,6 +62,7 @@ space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
 
 def parametric_model(activation, optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs):
     model = Sequential()
+    model.add(Dense(10, input_shape=(5,)))
     for i in range(n_hidden_layers):
         model.add(Dense(n_weights, activation=activation))
     model.add(Dense(5))
@@ -106,6 +107,6 @@ def objective(**params):
 #plt.savefig('plots/res_gp_conv.png')
 
 #vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-vmape, model = parametric_model('relu', Adam, 0.004, 5, 50, 150, 400)
+vmape, model = parametric_model('relu', Adam, 0.004, 6, 50, 150, 600)
 model.save_weights('data/keras_model')
 print ('\nError: {:2.3f}%'.format(vmape))
