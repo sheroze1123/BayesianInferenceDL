@@ -27,7 +27,7 @@ and the reduced order model given training examples.
     - `generate_fin_dataset{_five_param}.py` creates Tensorflow-friendly datasets by solving the forward problem with random parameters.
 - `gp_min_keras.py` provides routines to perform Bayesian optimization to pick the appropriate hyperparameters given a metric to 
 assess the accuracy of the neural network.
-- `bayes_inv{_five_param}.py` uses the forward solvers with the reduced order model and with the neural network correction to 
+- `bayes_inv.py` uses the forward solvers with the reduced order model and with the neural network correction to 
 perform the Bayesian inference of the thermal conductivities. NOTE: Currently uses [MUQ](http://muq.mit.edu) but I am in the 
 process of switching to a more mature sampling-based Bayesian inference library as MUQ has very little documentation 
 and is tricky to install. 
