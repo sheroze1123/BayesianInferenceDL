@@ -13,3 +13,11 @@ Learning ROM error
 
 Universal Approximator Theorem
     - Verify 5-parameter UAT (R^5 -> R continuous operator on a compact set. So increasing width should help)
+
+No affine decomposition case:
+    If the parameter is a field, average per subfin. Gives you an affine decomposition.
+    Get snapshots of each parameters, then take average k
+
+Gaussian field to model conductivity. Do log conductivity as it cond. is positive.
+Gaussian field to generate random conductivity fields
+Add noisy measurements

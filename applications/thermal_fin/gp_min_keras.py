@@ -72,41 +72,36 @@ def parametric_model(activation, optimizer, lr, n_hidden_layers, n_weights, batc
     vmape = history.history['val_mean_absolute_percentage_error'][-1]
     #  tr_losses = history.history['mean_absolute_percentage_error']
     #  vmapes = history.history['val_mean_absolute_percentage_error']
-    #  plt.plot(tr_losses)
-    #  plt.plot(vmapes)
-    #  plt.legend(["Mean training error", "Mean validation error"])
-    #  plt.xlabel("Epoch", fontsize=14)
-    #  plt.ylabel("Absolute percentage error", fontsize=14)
-    #  plt.show()
-    #  plt.plot(errors_val)
-    #  plt.plot(model.predict(z_val), 'k-x')
-    #  plt.legend(['True error','Predicted error'])
-    #  plt.ylabel('Error in average temperature y - y_r', fontsize=14)
-    #  plt.xlabel('Validation dataset index', fontsize=14)
-    #  plt.show()
+    #  plt.semilogy(tr_losses[200:])
+    #  plt.semilogy(vmapes[200:])
+    #  plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
+    #  plt.xlabel("Epoch", fontsize=10)
+    #  plt.ylabel("Absolute percentage error", fontsize=10)
+    #  plt.savefig("subfin_avg_tr_v_loss.png",dpi=250)
     return vmape, model
+    #  return vmape
 
 
 @use_named_args(space)
 def objective(**params):
     return parametric_model(**params)
 
-#res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
+#  res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
 
-#print("Best score: {}".format(res_gp.fun))
-#print('''Best parameters:\n
-#   Activation function: {}
-#   Optimizer: {}
-#   Learning rate: {}
-#   Num. hidden Layers: {}
-#   Num. weights: {}
-#   Batch size: {}
-#   Num. Epochs: {}'''.format(*res_gp.x))
+#  print("Best score: {}".format(res_gp.fun))
+#  print('''Best parameters:\n
+ #  Activation function: {}
+ #  Optimizer: {}
+ #  Learning rate: {}
+ #  Num. hidden Layers: {}
+ #  Num. weights: {}
+ #  Batch size: {}
+ #  Num. Epochs: {}'''.format(*res_gp.x))
 
-#plot_convergence(res_gp)
-#plt.savefig('plots/res_gp_conv.png')
+#  plot_convergence(res_gp)
+#  plt.savefig('plots/res_gp_conv.png')
 
 #vmape = parametric_model('relu', Adam, 0.0001, 6, 100, 10, 400)
-vmape, model = parametric_model('relu', Adam, 0.004, 6, 50, 150, 600)
+vmape, model = parametric_model('relu', Adam, 0.0012, 6, 58, 90, 400)
 model.save_weights('data/keras_model')
 print ('\nError: {:2.3f}%'.format(vmape))
