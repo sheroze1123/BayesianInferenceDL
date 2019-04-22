@@ -1,3 +1,13 @@
+# Bayesian Inference
+
+- Extend PyMC3 to have DRAM
+- Compute gradient of ROM + error model to use NUTS, HMC
+- Gaussian field to model conductivity. Do log conductivity as it cond. is positive.
+- Gaussian field to generate random conductivity fields
+- Add noisy measurements
+
+# Forward Problem 
+
 Implement model contrained adaptive sampling
     - Reimplement in PETScVector format
     - PETSc Optimization tools
@@ -6,18 +16,19 @@ Implement model contrained adaptive sampling
 Improve performance
     - Use PETScMatrix only!
 
+# Reduced Order Modeling
+
 Learning ROM error
     - Architecture for regresion
     - Precompute dataset and use shuffle -COMPLETE-
     - CNNs on finite element nodes
 
-Universal Approximator Theorem
-    - Verify 5-parameter UAT (R^5 -> R continuous operator on a compact set. So increasing width should help)
-
 No affine decomposition case:
     If the parameter is a field, average per subfin. Gives you an affine decomposition.
     Get snapshots of each parameters, then take average k
 
-Gaussian field to model conductivity. Do log conductivity as it cond. is positive.
-Gaussian field to generate random conductivity fields
-Add noisy measurements
+# Machine Learning
+
+Universal Approximator Theorem
+    - Verify 5-parameter UAT (R^5 -> R continuous operator on a compact set. So increasing width should help)
+

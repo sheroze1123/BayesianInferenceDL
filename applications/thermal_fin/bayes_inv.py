@@ -6,6 +6,7 @@ import dolfin as dl
 dl.set_log_level(40)
 from forward_solve import Fin, get_space
 from muq_mod_five_param import ROM_forward, DL_ROM_forward, FOM_forward
+import matplotlib.pyplot as plt
 
 # MUQ Includes
 import sys
