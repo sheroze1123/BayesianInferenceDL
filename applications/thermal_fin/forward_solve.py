@@ -207,7 +207,8 @@ class Fin:
 
 
 def get_space(resolution):
-    # Create a fin geometry
+    # Create the thermal fin geometry as referenced in Tan's thesis
+
     geometry = Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
             + Rectangle(Point(0.0, 0.75), Point(2.5, 1.0)) \
             + Rectangle(Point(0.0, 1.75), Point(2.5, 2.0)) \
