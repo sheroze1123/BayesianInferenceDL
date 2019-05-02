@@ -3,6 +3,33 @@ import tensorflow as tf
 from dolfin import *
 from forward_solve import Fin, get_space
 from pandas import read_csv
+from gaussian_field import make_cov_chol
+
+def gen_avg_rom_dataset(dataset_size, resolution=40):
+    V = get_space(resolution)
+    chol = make_cov_chol(V)
+    z = Function(V)
+    solver = Fin(V)
+    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    qoi_errors = np.zeros((dataset_size, 5))
+
+    # TODO: Needs to be fixed for higher order functions
+    z_s = np.zeros((dataset_size, V.dim()))
+
+    for i in range(dataset_size):
+        norm = np.random.randn(len(chol))
+        nodal_vals = np.exp(0.5 * chol.T @ norm)
+        z.vector()[:] = nodal_vals
+        z_s[i,:] = nodal_vals
+        A_r, B_r, C_r, x_r, y_r = solver.averaged_forward(z, phi)
+        x, y, A, B, C = solver.forward(z)
+        qoi = solver.qoi_operator(z)
+        qoi_r = solver.reduced_qoi_operator(x_r)
+        qoi_errors[i,:] = qoi - qoi_r
+
+    np.savetxt('data/z_avg_eval.txt', z_s, delimiter=",")
+    np.savetxt('data/errors_avg_eval.txt', qoi_errors, delimiter=",")
+    return (z_s, qoi_errors)
 
 def generate_five_param(dataset_size, resolution=40):
     V = get_space(resolution)

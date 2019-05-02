@@ -62,17 +62,7 @@ class Fin:
         C = C[:]
         return C, domain_measure
 
-    def qoi_operator(self, z):
-        '''
-        Returns the quantities of interest given the state variable
-        '''
-        #  average = assemble(z * self.dx)/self.domain_measure
-
-        #  z_vec = z.vector()[:] #TODO: Very inefficient
-        #  rand_sample = z_vec[self.samp_idx]
-
-        #TODO: External surface sampling. Most physically realistic
-
+    def subfin_avg_op(self, z):
         # Subfin averages
         middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=2)
         fin1 = Expression("(((x[1] >=0.75) && (x[1] <= 1.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
@@ -89,6 +79,18 @@ class Fin:
         subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
 
         return subfin_avgs
+
+    def qoi_operator(self, z):
+        '''
+        Returns the quantities of interest given the state variable
+        '''
+        #  average = assemble(z * self.dx)/self.domain_measure
+
+        #  z_vec = z.vector()[:] #TODO: Very inefficient
+        #  rand_sample = z_vec[self.samp_idx]
+
+        #TODO: External surface sampling. Most physically realistic
+        return self.subfin_avg_op(z)
 
     def reduced_qoi_operator(self, z_r):
         z_nodal_vals = np.dot(self.phi, z_r)
@@ -191,6 +193,14 @@ class Fin:
         y_r = np.dot(C_r, x_r)
 
         return A_r, B_r, C_r, x_r, y_r
+
+    def averaged_forward(self, m, phi):
+        '''
+        Given thermal conductivity as a FEniCS function, uses subfin averages
+        to reduce the parameter dimension and performs a ROM solve given 
+        the reduced basis phi
+        '''
+        return self.r_fwd_no_full_5_param(self.subfin_avg_op(m), phi)
 
     def r_fwd_no_full_5_param(self, k_s, phi):
         return self.r_fwd_no_full(self.five_param_to_function(k_s), phi)

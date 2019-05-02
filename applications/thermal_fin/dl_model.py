@@ -7,7 +7,7 @@ from dolfin import set_log_level; set_log_level(40)
 from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from tensorflow.keras.layers import Dropout, Dense
-from generate_fin_dataset import generate_five_param_np, gen_five_param_subfin_avg
+from generate_fin_dataset import generate_five_param_np, gen_five_param_subfin_avg, gen_avg_rom_dataset
 
 def load_dataset(load_prev=True, tr_size=4000, v_size=200):
     if os.path.isfile('data/z_train_np.txt') and load_prev:
@@ -29,21 +29,48 @@ def load_dataset(load_prev=True, tr_size=4000, v_size=200):
     return z_train, errors_train, z_val, errors_val
 
 def load_dataset_subfin(load_prev=True, tr_size=4000, v_size=200):
-    if os.path.isfile('data/z_avg_tr.txt') and load_prev:
-        z_train = np.loadtxt('data/z_avg_tr.txt', delimiter=',')
-        errors_train =  np.loadtxt('data/err_avg_tr.txt', delimiter=',')
+    '''
+    Load dataset where the conductivity is parametrized by 5 parameters per subfin
+    and the QoI is the averaged temperature per subfin.
+    '''
+    if os.path.isfile('data/z_subfin_temp_avg_train.txt') and load_prev:
+        z_train = np.loadtxt('data/z_subfin_temp_avg_train.txt', delimiter=',')
+        errors_train =  np.loadtxt('data/errors_subfin_temp_avg_train.txt', delimiter=',')
     else:
         (z_train, errors_train) = gen_five_param_subfin_avg(tr_size)
-        np.savetxt('data/z_avg_tr.txt', z_train, delimiter=',')
-        np.savetxt('data/err_avg_tr.txt', errors_train, delimiter=',')
+        np.savetxt('data/z_subfin_temp_avg_train.txt', z_train, delimiter=',')
+        np.savetxt('data/errors_subfin_temp_avg_train.txt', errors_train, delimiter=',')
 
-    if os.path.isfile('data/z_avg_v.txt') and load_prev:
-        z_val = np.loadtxt('data/z_avg_v.txt', delimiter=',')
-        errors_val =  np.loadtxt('data/err_avg_v.txt', delimiter=',')
+    if os.path.isfile('data/z_subfin_temp_avg_eval.txt') and load_prev:
+        z_val = np.loadtxt('data/z_subfin_temp_avg_eval.txt', delimiter=',')
+        errors_val =  np.loadtxt('data/errors_subfin_temp_avg_eval.txt', delimiter=',')
     else:
         (z_val, errors_val) = gen_five_param_subfin_avg(v_size)
-        np.savetxt('data/z_avg_v.txt', z_val, delimiter=',')
-        np.savetxt('data/err_avg_v.txt', errors_val, delimiter=',')
+        np.savetxt('data/z_subfin_temp_avg_eval.txt', z_val, delimiter=',')
+        np.savetxt('data/errors_subfin_temp_avg_eval.txt', errors_val, delimiter=',')
+
+    return z_train, errors_train, z_val, errors_val
+
+def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
+    '''
+    Load dataset where the conductivity is parametrized as a FEniCS function
+    and the QoI is the averaged temperature per subfin
+    '''
+    if os.path.isfile('data/z_conductivity_avg_train.txt') and load_prev:
+        z_train = np.loadtxt('data/z_conductivity_avg_train.txt', delimiter=',')
+        errors_train =  np.loadtxt('data/errors_conductivity_avg_train.txt', delimiter=',')
+    else:
+        (z_train, errors_train) = gen_avg_rom_dataset(tr_size)
+        np.savetxt('data/z_conductivity_avg_train.txt', z_train, delimiter=',')
+        np.savetxt('data/errors_conductivity_avg_train.txt', errors_train, delimiter=',')
+
+    if os.path.isfile('data/z_conductivity_avg_eval.txt') and load_prev:
+        z_val = np.loadtxt('data/z_conductivity_avg_eval.txt', delimiter=',')
+        errors_val =  np.loadtxt('data/errors_conductivity_avg_eval.txt', delimiter=',')
+    else:
+        (z_val, errors_val) = gen_avg_rom_dataset(v_size)
+        np.savetxt('data/z_conductivity_avg_eval.txt', z_val, delimiter=',')
+        np.savetxt('data/errors_conductivity_avg_eval.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -76,12 +103,16 @@ def parametric_model(activation,
     '''
 
     if z_train is None:
-        z_train, errors_train, z_val, errors_val = load_dataset_subfin()
+        z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
 
+    input_shape = z_train.shape[1]
     model = Sequential()
-    model.add(Dense(10, input_shape=(5,)))
+    #  model.add(Dense(10, input_shape=(5,)))
     for i in range(n_hidden_layers):
-        model.add(Dense(n_weights, activation=activation))
+        if i==0:
+            model.add(Dense(n_weights, activation=activation, input_shape=(input_shape,)))
+        else:
+            model.add(Dense(n_weights, activation=activation))
     model.add(Dense(5))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
     history = model.fit(z_train, errors_train, epochs=n_epochs, batch_size=batch_size,
@@ -103,9 +134,14 @@ def parametric_model(activation,
     # Saves Keras model (useful for Bayesian inference)
     save_weights = False
     if (save_weights):
-        model.save_weights('data/keras_model')
+        model.save_weights('data/keras_model_avg')
 
     return vmape
 
-vmape = parametric_model('relu', Adam, 0.0012, 6, 58, 90, 400)
-print ('\nError: {:2.3f}%'.format(vmape))
+#  vmape = parametric_model('relu', Adam, 0.0012, 6, 58, 90, 400)
+#  print ('\nError: {:2.3f}%'.format(vmape))
+#  z_train, errors_train = gen_avg_rom_dataset(1000)
+#  z_val, errors_val = gen_avg_rom_dataset(100)
+#  vmape = parametric_model('relu', Adam, 0.001, 6, 60, 90, 400, 
+        #  z_train, errors_train, z_val, errors_val)
+#  print ('\nError: {:2.3f}%'.format(vmape))

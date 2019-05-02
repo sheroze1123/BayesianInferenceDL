@@ -7,7 +7,7 @@ from skopt.plots import plot_convergence
 from dl_model import load_dataset_subfin, parametric_model
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 
-z_train, errors_train, z_val, errors_val = load_dataset_subfin()
+#  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
 
 # Defines the hyperparameter space
 space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
@@ -22,7 +22,7 @@ space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
 def objective(**params):
     return parametric_model(**params)
 
-res_gp = gp_minimize(objective, space, n_calls=100, random_state=0)
+res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
 
 print("Best score: {}".format(res_gp.fun))
 print('''Best parameters:\n
@@ -35,4 +35,4 @@ print('''Best parameters:\n
  Num. Epochs: {}'''.format(*res_gp.x))
 
 plot_convergence(res_gp)
-plt.savefig('plots/res_gp_conv.png')
+plt.savefig('plots/res_gp_conv_avg_rom.png')
