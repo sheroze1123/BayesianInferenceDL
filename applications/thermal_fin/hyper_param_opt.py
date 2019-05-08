@@ -22,7 +22,7 @@ space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
 def objective(**params):
     return parametric_model(**params)
 
-res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
+res_gp = gp_minimize(objective, space, n_calls=60, random_state=0)
 
 print("Best score: {}".format(res_gp.fun))
 print('''Best parameters:\n

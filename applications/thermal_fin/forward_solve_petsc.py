@@ -1,5 +1,4 @@
 from dolfin import *
-import numpy as np
 from mshr import Rectangle, generate_mesh
 
 class Fin:
@@ -46,7 +45,7 @@ class Fin:
         self._F = inner(self._k * grad(self.w), grad(self.v)) * self.dx(0) + \
             self.v * self.Bi * self.w * self.ds(1)
         self._a = self.v * self.dx
-        self.B = assemble(self._a)[:]
+        self.B = assemble(self._a)
         self.C, self.domain_measure = self.averaging_operator()
         self.A = PETScMatrix()
         self.dz_dk_T = self.full_grad_to_five_param()
@@ -80,7 +79,7 @@ class Fin:
         y = assemble(z * self.dx)/self.domain_measure
 
         assemble(self._F, tensor=self.A)
-        return z, y, self.A.array(), self.B, self.C
+        return z, y, self.A, self.B, self.C
 
     def averaging_operator(self):
         '''
@@ -91,7 +90,6 @@ class Fin:
         domain_integral = assemble(v * self.dx)
         domain_measure = assemble(d_omega_f * self.dx)
         C = domain_integral/domain_measure
-        C = C[:]
         return C, domain_measure
 
     def qoi_operator(self, x):
@@ -107,8 +105,8 @@ class Fin:
         return self.subfin_avg_op(x)
 
     def reduced_qoi_operator(self, z_r):
-        z_nodal_vals = np.dot(self.phi, z_r)
-        #  z_nodal_vals = self.phi.mult(z_r)
+        #  z_nodal_vals = np.dot(self.phi, z_r)
+        z_nodal_vals = self.phi.mult(z_r)
         z_tilde = Function(self.V)
         z_tilde.vector().set_local(z_nodal_vals)
         return self.qoi_operator(z_tilde)
@@ -136,20 +134,22 @@ class Fin:
         '''
 
         self.phi = phi
-        A_r = np.dot(psi.T, np.dot(A, phi))
-        # A_r = psi.transposeMatMult(A.matMult(phi))
-        B_r = np.dot(psi.T, B)
-        # B_r = psi.transposeMatMult(B)
-        C_r = np.dot(C, phi)
-        # C_r = C.matMult(phi)
+        #  A_r = np.dot(psi.T, np.dot(A, phi))
+        A_r = psi.transposeMatMult(A.matMult(phi))
+        #  B_r = np.dot(psi.T, B)
+        B_r = psi.transposeMatMult(B)
+        #  C_r = np.dot(C, phi)
+        C_r = C.matMult(phi)
 
         #Solve reduced system to obtain x_r
-        x_r = np.linalg.solve(A_r, B_r)
-        #  A_r.solve(B_r, x_r)
-        y_r = np.dot(C_r, x_r)
-        # C_r.mult(x_r, y_r)
+        #  x_r = np.linalg.solve(A_r, B_r)
+        x_r = PETScVector()
+        A_r.solve(B_r, x_r)
+        #  y_r = np.dot(C_r, x_r)
+        y_r = PETScVector()
+        C_r.mult(x_r, y_r)
 
-        return A_r, B_r, C_r, x_r, y_r
+        return x_r, y_r, A_r, B_r, C_r 
 
     def averaged_forward(self, m, phi):
         '''
@@ -168,12 +168,12 @@ class Fin:
         '''
         
         self._k.assign(k)
-        #  F, a = self.get_weak_forms(m)
         assemble(self._F, tensor=self.A)
 
-        A_m = self.A.array()
-        psi = np.dot(A_m, phi)
-        # A_m.matMult(phi, psi)
+        #  A_m = A.array()
+        #  psi = np.dot(A_m, phi)
+        psi = PETScMatrix()
+        self.A.matMult(phi, psi)
         return self.reduced_forward(A_m, self.B,self.C, psi, phi)
 
     def subfin_avg_op(self, z):
@@ -190,11 +190,11 @@ class Fin:
         fin3_avg = assemble(fin3 * z * self.dx)/0.25 
         fin4_avg = assemble(fin4 * z * self.dx)/0.25 
 
+        #  subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
         # Better way to create all of this at once with assemble?
-        #  subfin_avgs = PETScVector()
-        #  subfin_avgs.init(5)
-        #  subfin_avgs.set_local([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
-        subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
+        subfin_avgs = PETScVector()
+        subfin_avgs.init(5)
+        subfin_avgs.set_local([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
 
         return subfin_avgs
 
@@ -218,13 +218,14 @@ class Fin:
         return k
 
     def full_grad_to_five_param(self):
-        dz_dk_T = np.zeros((5,self.dofs))
+        dz_dk_T = PETScMatrix()
+        #  dz_dk_T = np.zeros((5,self.dofs))
 
-        for i in range(5):
-            impulse = np.zeros((5,))
-            impulse[i] = 1.0
-            k = self.five_param_to_function(impulse)
-            dz_dk_T[i,:] = k.vector()[:]
+        #  for i in range(5):
+            #  impulse = np.zeros((5,))
+            #  impulse[i] = 1.0
+            #  k = self.five_param_to_function(impulse)
+            #  dz_dk_T[i,:] = k.vector()[:]
 
         return dz_dk_T
 

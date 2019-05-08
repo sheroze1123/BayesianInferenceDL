@@ -30,7 +30,7 @@ the reduced basis.
 in the adaptive sampling method.
 - The `rom_error_predict{_five_param}.py` file trains a neural network to fit 
 the error between the high fidelity model and the reduced order model given 
-training examples using Tensorflow Estimators (deprecated. Refer to `dl_rom.py`
+training examples using Tensorflow Estimators (deprecated. Refer to 
 and `hyper_param_opt.py`.
 - The `models` folder contains a growing collection of deep neural network models 
 created using Tensorflow Estimators.

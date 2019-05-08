@@ -2,7 +2,7 @@ import matplotlib; matplotlib.use("agg")
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-dark-palette')
 import numpy as np
-from dl_rom import load_parametric_model
+from dl_model import load_parametric_model
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from forward_solve import Fin, get_space
 

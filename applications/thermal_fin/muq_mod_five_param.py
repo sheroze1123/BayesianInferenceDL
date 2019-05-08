@@ -2,7 +2,7 @@ import sys
 sys.path.insert(0,'/home/fenics/Installations/MUQ_INSTALL/lib')
 import pymuqModeling as mm
 import numpy as np
-from dl_rom import load_parametric_model
+from dl_model import load_parametric_model
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from forward_solve import Fin, get_space
 

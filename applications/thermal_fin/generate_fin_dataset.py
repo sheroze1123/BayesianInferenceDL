@@ -19,11 +19,11 @@ def gen_avg_rom_dataset(dataset_size, resolution=40):
     for i in range(dataset_size):
         norm = np.random.randn(len(chol))
         nodal_vals = np.exp(0.5 * chol.T @ norm)
-        z.vector()[:] = nodal_vals
+        z.vector().set_local(nodal_vals)
         z_s[i,:] = nodal_vals
         A_r, B_r, C_r, x_r, y_r = solver.averaged_forward(z, phi)
         x, y, A, B, C = solver.forward(z)
-        qoi = solver.qoi_operator(z)
+        qoi = solver.qoi_operator(x)
         qoi_r = solver.reduced_qoi_operator(x_r)
         qoi_errors[i,:] = qoi - qoi_r
 

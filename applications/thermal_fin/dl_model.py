@@ -132,16 +132,61 @@ def parametric_model(activation,
     #  plt.savefig("subfin_avg_tr_v_loss.png",dpi=250)
 
     # Saves Keras model (useful for Bayesian inference)
-    save_weights = False
+    save_weights = True
     if (save_weights):
         model.save_weights('data/keras_model_avg')
 
+    # Save best model
+    best_vmape = np.loadtxt('data/best_vmape.txt').item()
+    if (vmape < best_vmape):
+        np.savetxt('data/best_vmape.txt',  np.array([vmape]))
+        model.save_weights('data/keras_model_avg_best')
+
     return vmape
+
+def load_parametric_model(activation, 
+        optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs):
+
+    model = Sequential()
+    model.add(Dense(10, input_shape=(5,)))
+    for i in range(n_hidden_layers):
+        model.add(Dense(n_weights, activation=activation))
+    model.add(Dense(5))
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+
+    if os.path.isfile('data/keras_model.index'):
+        print ("Keras model weights loaded")
+        model.load_weights('data/keras_model')
+    else: 
+        print ("Keras model not found!")
+
+    return model
+
+def load_parametric_model_avg(activation,
+        optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs, input_shape):
+
+    model = Sequential()
+    for i in range(n_hidden_layers):
+        if i==0:
+            model.add(Dense(n_weights, activation=activation, input_shape=(input_shape,)))
+        else:
+            model.add(Dense(n_weights, activation=activation))
+    model.add(Dense(5))
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+
+    if os.path.isfile('data/keras_model_avg_best.index'):
+        print ("Keras model weights loaded")
+        model.load_weights('data/keras_model_avg_best')
+    else: 
+        print ("Keras model not found!")
+
+    return model
 
 #  vmape = parametric_model('relu', Adam, 0.0012, 6, 58, 90, 400)
 #  print ('\nError: {:2.3f}%'.format(vmape))
-#  z_train, errors_train = gen_avg_rom_dataset(1000)
-#  z_val, errors_val = gen_avg_rom_dataset(100)
-#  vmape = parametric_model('relu', Adam, 0.001, 6, 60, 90, 400, 
-        #  z_train, errors_train, z_val, errors_val)
-#  print ('\nError: {:2.3f}%'.format(vmape))
+z_train, errors_train = gen_avg_rom_dataset(4000)
+z_val, errors_val = gen_avg_rom_dataset(200)
+vmape = parametric_model('relu', Adam, 0.0011283825254944236, 4, 66, 94, 400, 
+        z_train, errors_train, z_val, errors_val)
+#  vmape = parametric_model('relu', Adam, 0.0024, 5, 50, 130, 400, 
+print ('\nError: {:2.3f}%'.format(vmape))

@@ -32,7 +32,7 @@ def make_cov_chol(V, kern_type='m52', length=0.3):
 #  chol = make_cov_chol(V)
 #  norm = np.random.randn(len(chol))
 #  q = Function(V)
-#  q.vector()[:] = np.exp(0.5 * chol.T @ norm)
+#  q.vector().set_local(np.exp(0.5 * chol.T @ norm))
 
 #  f = plot(q)
 #  plt.colorbar(f)
