@@ -1,12 +1,14 @@
 from dolfin import *
 from mshr import Rectangle, generate_mesh
+from petsc4py import PETSc
+set_log_level(40)
 
 class Fin:
     '''
     A class the implements the heat conduction problem for a thermal fin
     '''
 
-    def __init__(self, V):
+    def __init__(self, V, phi):
         '''
         Initializes a thermal fin instance for a given function space
 
@@ -14,17 +16,12 @@ class Fin:
             V - dolfin FunctionSpace
         '''
 
-        self.phi = None
+        self.phi = phi
+        (self.n, self.n_r) = phi.getSize()
 
+        # Set boundary conditions for domain 
         self.V = V
         self.dofs = len(V.dofmap().dofs()) 
-
-        # Currently uses a fixed Biot number
-        self.Bi = Constant(0.1)
-
-        # Trial and test functions for the weak forms
-        self.w = TrialFunction(V)
-        self.v = TestFunction(V)
 
         mesh = V.mesh()
         domains = MeshFunction("size_t", mesh, mesh.topology().dim())
@@ -41,20 +38,70 @@ class Fin:
         self.dx = Measure('dx', domain=mesh, subdomain_data=domains)
         self.ds = Measure('ds', domain=mesh, subdomain_data=boundaries)
 
+        # Currently uses a fixed Biot number
+        self.Bi = Constant(0.1)
+
+        # Trial and test functions for the weak forms
+        self.w = TrialFunction(V)
+        self.v = TestFunction(V)
+
+        # Thermal conductivity parameter
         self._k = Function(V)
+
+        # Reduced variables
+        self._w_r = PETSc.Vec().createSeq(self.n_r)
+        self._A_r = PETSc.Mat()
+        #  self._A_r = PETSc.Mat().createAIJ([self.n_r, self.n_r])
+        #  self._A_r.setUp()
+        #  self._A_r.assemblyBegin() # Make matrices useable.
+        #  self._A_r.assemblyEnd()
+        #  print(self._A_r.getSize())
+        self._B_r = PETSc.Vec().createSeq(self.n_r)
+        self._C_r = PETSc.Vec().createSeq(self.n_r)
+
+        self.ksp = PETSc.KSP().create()
+        #  self.ksp.setFromOptions()
+        #  print ('Solving with: {}'.format(self.ksp.getType()))
+
+        # Output temperature field
+        self._w = Function(self.V)
+
+        # Temperature field corrected prediction
+        self._w_tilde =  Function(self.V)
+
+        # Setup weak forms
         self._F = inner(self._k * grad(self.w), grad(self.v)) * self.dx(0) + \
             self.v * self.Bi * self.w * self.ds(1)
         self._a = self.v * self.dx
-        self.B = assemble(self._a)
-        self.C, self.domain_measure = self.averaging_operator()
+
+        # Setup matrices for solves
         self.A = PETScMatrix()
+        self.B = as_backend_type(assemble(self._a))
+        self.C, self.domain_measure = self.averaging_operator()
         self.dz_dk_T = self.full_grad_to_five_param()
 
-        # Randomly sampling state vector for inverse problems
+        # Setup QoI calculation
+        middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=2)
+        fin1 = Expression("(((x[1] >=0.75) && (x[1] <= 1.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        fin2 = Expression("(((x[1] >=1.75) && (x[1] <= 2.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        fin3 = Expression("(((x[1] >=2.75) && (x[1] <= 3.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        fin4 = Expression("(((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+
+        self.middle_avg = middle * self._w * self.dx
+        self.fin1_avg = 4.0 * fin1 * self._w * self.dx # 0.25 is the area of the subfin
+        self.fin2_avg = 4.0 * fin2 * self._w * self.dx
+        self.fin3_avg = 4.0 * fin3 * self._w * self.dx
+        self.fin4_avg = 4.0 * fin4 * self._w * self.dx
+
+        # Setup randomly sampling state vector for inverse problems
         #  self.n_samples = 3
         #  self.samp_idx = np.random.randint(0, self.dofs, self.n_samples)    
 
     def forward_five_param(self, k_s):
+        '''
+        Given a numpy array of conductivity values, (a real value per subfin)
+        performs a forward solves and returns temperature of fin.
+        '''
         return self.forward(self.five_param_to_function(k_s))
 
     def forward(self, k):
@@ -62,6 +109,10 @@ class Fin:
         Performs a forward solve to obtain temperature distribution
         given the conductivity field m and FunctionSpace V.
         This solve assumes Biot number to be a constant.
+
+        Arguments:
+         k - Thermal conductivity as a numpy array of nodal values
+
         Returns:
          z - Temperature field 
          y - Average temperature (quantity of interest)
@@ -71,15 +122,15 @@ class Fin:
         '''
 
         self._k.assign(k)
-        #  F, a = self.get_weak_forms(m)
+        solve(self._F == self._a, self._w) 
 
-        z = Function(self.V)
-        solve(self._F == self._a, z) 
+        # Compute QoI (average temperature)
+        y = self._w.vector().inner(self.C)
 
-        y = assemble(z * self.dx)/self.domain_measure
-
+        # Assemble LHS for ROM
         assemble(self._F, tensor=self.A)
-        return z, y, self.A, self.B, self.C
+
+        return self._w, y, self.A, self.B, self.C
 
     def averaging_operator(self):
         '''
@@ -87,31 +138,38 @@ class Fin:
         '''
         v = TestFunction(self.V)
         d_omega_f = interpolate(Expression("1.0", degree=2), self.V)
-        domain_integral = assemble(v * self.dx)
         domain_measure = assemble(d_omega_f * self.dx)
-        C = domain_integral/domain_measure
+        C = as_backend_type(assemble(v/domain_measure * self.dx))
         return C, domain_measure
 
-    def qoi_operator(self, x):
+    def qoi_operator(self, w):
         '''
         Returns the quantities of interest given the state variable
         '''
-        #  average = assemble(z * self.dx)/self.domain_measure
+        #  qoi = assemble(z * self.dx)/self.domain_measure
 
+        # Random sample QoI
         #  z_vec = z.vector()[:] #TODO: Very inefficient
-        #  rand_sample = z_vec[self.samp_idx]
+        #  qoi = z_vec[self.samp_idx]
 
         #TODO: External surface sampling. Most physically realistic
-        return self.subfin_avg_op(x)
+        
+        # Subfin temperature average (default QoI)
+        qoi = self.subfin_avg_op(w)
 
-    def reduced_qoi_operator(self, z_r):
+        return qoi
+
+    def reduced_qoi_operator(self, w_r):
+        '''
+        Arguments:
+         w_r : PETSc.Vec - Reduced state vector
+        '''
         #  z_nodal_vals = np.dot(self.phi, z_r)
-        z_nodal_vals = self.phi.mult(z_r)
-        z_tilde = Function(self.V)
-        z_tilde.vector().set_local(z_nodal_vals)
-        return self.qoi_operator(z_tilde)
+        w_tilde_vec = as_backend_type(self._w_tilde.vector()).vec()
+        self.phi.mult(w_r, w_tilde_vec)
+        return self.qoi_operator(self._w_tilde)
 
-    def reduced_forward(self, A, B, C, psi, phi):
+    def reduced_forward(self, A, B, C):
         '''
         Returns the reduced matrices given a reduced trial and test basis
         to solve reduced system: A_r(z)x_r = B_r(z)
@@ -120,10 +178,10 @@ class Fin:
         TODO: Rewrite everything in PETScMatrix
 
         Arguments:
-            A   - LHS forward operator in A(z)x = B(z)
-            B   - RHS in A(z)x = B(z)
-            psi - Trial basis
-            phi - Test basis
+            A : PETScMatrix - LHS forward operator in A(z)x = B(z)
+            B : PETScVector - RHS in A(z)x = B(z)
+            psi : PETSc.Mat - Trial basis
+            phi : PETSc.Mat - Test basis
 
         Returns:
             A_r - Reduced LHS
@@ -133,36 +191,54 @@ class Fin:
             y_r - Reduced QoI
         '''
 
-        self.phi = phi
+        psi = PETSc.Mat()
+        self.A.mat().matMult(self.phi, psi)
         #  A_r = np.dot(psi.T, np.dot(A, phi))
-        A_r = psi.transposeMatMult(A.matMult(phi))
+        
+        Aphi = PETSc.Mat()
+        A.mat().matMult(self.phi, Aphi)
+        A_r = PETSc.Mat()
+        #  import pdb; pdb.set_trace()
+        psi.transposeMatMult(Aphi, A_r)
+        #  psi.transposeMatMult(Aphi, A_r)
         #  B_r = np.dot(psi.T, B)
-        B_r = psi.transposeMatMult(B)
+        psi.multTranspose(B.vec(), self._B_r)
         #  C_r = np.dot(C, phi)
-        C_r = C.matMult(phi)
+        self.phi.multTranspose(C.vec(), self._C_r)
+
+        #  for i in range(81):
+            #  for j in range(81):
+                #  print(self._A_r.getValue(i, j), end=",")
+                #  print(Aphi.getValue(i, j), end=",")
+                #  print(self.A.mat().getValue(i, j), end=",")
 
         #Solve reduced system to obtain x_r
         #  x_r = np.linalg.solve(A_r, B_r)
-        x_r = PETScVector()
-        A_r.solve(B_r, x_r)
-        #  y_r = np.dot(C_r, x_r)
-        y_r = PETScVector()
-        C_r.mult(x_r, y_r)
 
-        return x_r, y_r, A_r, B_r, C_r 
+        #  PETSc.Options().setValue("ksp_type", "fgmres")
+        #  PETSc.Options().setValue("ksp_monitor", "")
+        #  PETSc.Options().setValue("ksp_converged_reason", "")
+        #  PETSc.Options().setValue("pc_type", "gamg")
+        #  self.ksp.setFromOptions()
+        #  self._A_r.solve(self._B_r, self._w_r)
+        self.ksp.setOperators(A_r)
+        self.ksp.solve(self._B_r, self._w_r)
+        y_r = self._C_r.dot(self._w_r)
 
-    def averaged_forward(self, m, phi):
+        return self._w_r, y_r, self._A_r, self._B_r, self._C_r 
+
+    def averaged_forward(self, m):
         '''
         Given thermal conductivity as a FEniCS function, uses subfin averages
         to reduce the parameter dimension and performs a ROM solve given 
         the reduced basis phi
         '''
-        return self.r_fwd_no_full_5_param(self.subfin_avg_op(m), phi)
+        return self.r_fwd_no_full_5_param(self.subfin_avg_op(m))
 
-    def r_fwd_no_full_5_param(self, k_s, phi):
-        return self.r_fwd_no_full(self.five_param_to_function(k_s), phi)
+    def r_fwd_no_full_5_param(self, k_s):
+        return self.r_fwd_no_full(self.five_param_to_function(k_s))
 
-    def r_fwd_no_full(self, k, phi):
+    def r_fwd_no_full(self, k):
         '''
         Solves the reduced system without solving the full system
         '''
@@ -172,29 +248,20 @@ class Fin:
 
         #  A_m = A.array()
         #  psi = np.dot(A_m, phi)
-        psi = PETScMatrix()
-        self.A.matMult(phi, psi)
-        return self.reduced_forward(A_m, self.B,self.C, psi, phi)
+        return self.reduced_forward(self.A, self.B,self.C)
 
-    def subfin_avg_op(self, z):
+    def subfin_avg_op(self, w):
         # Subfin averages
-        middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=2)
-        fin1 = Expression("(((x[1] >=0.75) && (x[1] <= 1.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
-        fin2 = Expression("(((x[1] >=1.75) && (x[1] <= 2.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
-        fin3 = Expression("(((x[1] >=2.75) && (x[1] <= 3.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
-        fin4 = Expression("(((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        self._w.assign(w)
 
-        middle_avg = assemble(middle * z * self.dx)
-        fin1_avg = assemble(fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
-        fin2_avg = assemble(fin2 * z * self.dx)/0.25 
-        fin3_avg = assemble(fin3 * z * self.dx)/0.25 
-        fin4_avg = assemble(fin4 * z * self.dx)/0.25 
-
-        #  subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
         # Better way to create all of this at once with assemble?
         subfin_avgs = PETScVector()
         subfin_avgs.init(5)
-        subfin_avgs.set_local([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
+        subfin_avgs.set_local([assemble(self.middle_avg), 
+            assemble(self.fin1_avg), 
+            assemble(self.fin2_avg), 
+            assemble(self.fin3_avg), 
+            assemble(self.fin4_avg)])
 
         return subfin_avgs
 
