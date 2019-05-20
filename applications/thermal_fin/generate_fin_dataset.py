@@ -27,8 +27,13 @@ def gen_avg_rom_dataset(dataset_size, resolution=40):
         qoi_r = solver.reduced_qoi_operator(x_r)
         qoi_errors[i,:] = qoi - qoi_r
 
-    np.savetxt('data/z_avg_eval.txt', z_s, delimiter=",")
-    np.savetxt('data/errors_avg_eval.txt', qoi_errors, delimiter=",")
+    if (dataset_size > 1000):
+        np.savetxt('data/z_avg_tr.txt', z_s, delimiter=",")
+        np.savetxt('data/errors_avg_tr.txt', qoi_errors, delimiter=",")
+
+    if (dataset_size < 400):
+        np.savetxt('data/z_avg_eval.txt', z_s, delimiter=",")
+        np.savetxt('data/errors_avg_eval.txt', qoi_errors, delimiter=",")
     return (z_s, qoi_errors)
 
 def generate_five_param(dataset_size, resolution=40):

@@ -1,6 +1,6 @@
-import matplotlib; matplotlib.use("agg")
+import matplotlib
+matplotlib.use('macosx')
 import matplotlib.pyplot as plt
-plt.style.use('seaborn-dark-palette')
 import numpy as np
 from dl_model import load_parametric_model_avg
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
@@ -10,7 +10,7 @@ from dolfin import Function
 z_val = np.loadtxt('data/z_avg_eval.txt', delimiter=',')
 errors_val =  np.loadtxt('data/errors_avg_eval.txt', delimiter=',')
 V = get_space(40)
-model = load_parametric_model_avg('relu', Adam, 0.0011283825254944236, 4, 66, 94, 218, V.dim())
+model = load_parametric_model_avg('elu', Adam, 0.129, 3, 58, 64, 466, V.dim())
 phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
 #  phi = phi[:,0:10]
 solver = Fin(V)
@@ -20,8 +20,8 @@ avgs_d = np.zeros((len(z_val), 5))
 avgs_c = np.zeros((len(z_val), 5))
 err_pred = np.zeros((len(z_val), 5))
 z = Function(V)
-print(z_val.shape)
 err_pred = model.predict(z_val)
+print ("Average validation error in pred: {}".format(np.average(np.divide(np.abs(errors_val - err_pred), np.abs(errors_val)))))
 
 for i in range(len(z_val)):
     nodal_vals = z_val[i,:]
@@ -31,6 +31,8 @@ for i in range(len(z_val)):
     avgs_f[i] = solver.qoi_operator(x)
     avgs_r[i] = solver.reduced_qoi_operator(x_r)
     avgs_d[i] = avgs_r[i] + err_pred[i]
+
+print ("Average relative error in tilde: {}".format(np.average(np.divide(np.abs(avgs_f - avgs_d), np.abs(avgs_f)))))
 
 for i in range(5):
     plt.cla()

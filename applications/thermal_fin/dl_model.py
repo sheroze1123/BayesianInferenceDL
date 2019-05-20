@@ -56,21 +56,21 @@ def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
     Load dataset where the conductivity is parametrized as a FEniCS function
     and the QoI is the averaged temperature per subfin
     '''
-    if os.path.isfile('data/z_conductivity_avg_train.txt') and load_prev:
-        z_train = np.loadtxt('data/z_conductivity_avg_train.txt', delimiter=',')
-        errors_train =  np.loadtxt('data/errors_conductivity_avg_train.txt', delimiter=',')
+    if os.path.isfile('data/z_avg_tr.txt') and load_prev:
+        z_train = np.loadtxt('data/z_avg_tr.txt', delimiter=',')
+        errors_train =  np.loadtxt('data/errors_avg_tr.txt', delimiter=',')
     else:
         (z_train, errors_train) = gen_avg_rom_dataset(tr_size)
-        np.savetxt('data/z_conductivity_avg_train.txt', z_train, delimiter=',')
-        np.savetxt('data/errors_conductivity_avg_train.txt', errors_train, delimiter=',')
+        np.savetxt('data/z_avg_tr.txt', z_train, delimiter=',')
+        np.savetxt('data/errors_avg_tr.txt', errors_train, delimiter=',')
 
-    if os.path.isfile('data/z_conductivity_avg_eval.txt') and load_prev:
-        z_val = np.loadtxt('data/z_conductivity_avg_eval.txt', delimiter=',')
-        errors_val =  np.loadtxt('data/errors_conductivity_avg_eval.txt', delimiter=',')
+    if os.path.isfile('data/z_avg_eval.txt') and load_prev:
+        z_val = np.loadtxt('data/z_avg_eval.txt', delimiter=',')
+        errors_val =  np.loadtxt('data/errors_avg_eval.txt', delimiter=',')
     else:
         (z_val, errors_val) = gen_avg_rom_dataset(v_size)
-        np.savetxt('data/z_conductivity_avg_eval.txt', z_val, delimiter=',')
-        np.savetxt('data/errors_conductivity_avg_eval.txt', errors_val, delimiter=',')
+        np.savetxt('data/z_avg_eval.txt', z_val, delimiter=',')
+        np.savetxt('data/errors_avg_eval.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -132,9 +132,9 @@ def parametric_model(activation,
     #  plt.savefig("subfin_avg_tr_v_loss.png",dpi=250)
 
     # Saves Keras model (useful for Bayesian inference)
-    save_weights = True
-    if (save_weights):
-        model.save_weights('data/keras_model_avg')
+    #  save_weights = True
+    #  if (save_weights):
+        #  model.save_weights('data/keras_model_avg')
 
     # Save best model
     best_vmape = np.loadtxt('data/best_vmape.txt').item()
@@ -175,8 +175,11 @@ def load_parametric_model_avg(activation,
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
 
     if os.path.isfile('data/keras_model_avg_best.index'):
-        print ("Keras model weights loaded")
+        print ("Best Keras model weights loaded")
         model.load_weights('data/keras_model_avg_best')
+    elif os.path.isfile('data/keras_model.index'):
+        print ("Keras model weight loaded")
+        modal.load_weights('data/keras_model')
     else: 
         print ("Keras model not found!")
 
@@ -184,9 +187,18 @@ def load_parametric_model_avg(activation,
 
 #  vmape = parametric_model('relu', Adam, 0.0012, 6, 58, 90, 400)
 #  print ('\nError: {:2.3f}%'.format(vmape))
-z_train, errors_train = gen_avg_rom_dataset(4000)
-z_val, errors_val = gen_avg_rom_dataset(200)
-vmape = parametric_model('relu', Adam, 0.0011283825254944236, 4, 66, 94, 400, 
-        z_train, errors_train, z_val, errors_val)
-#  vmape = parametric_model('relu', Adam, 0.0024, 5, 50, 130, 400, 
-print ('\nError: {:2.3f}%'.format(vmape))
+
+#  z_train, errors_train = gen_avg_rom_dataset(4000)
+#  z_val, errors_val = gen_avg_rom_dataset(200)
+#  vmape = parametric_model('relu', Adam, 0.001128, 4, 66, 94, 400, 
+        #  z_train, errors_train, z_val, errors_val)
+
+
+
+#  z_train = np.loadtxt('data/z_avg_tr.txt', delimiter=",")
+#  errors_train = np.loadtxt('data/errors_avg_tr.txt', delimiter=",")
+#  z_val = np.loadtxt('data/z_avg_eval.txt', delimiter=",")
+#  errors_val = np.loadtxt('data/errors_avg_eval.txt', delimiter=",")
+#  vmape = parametric_model('elu', Adam, 0.001, 4, 50, 10, 400, 
+        #  z_train, errors_train, z_val, errors_val)
+#  print ('\nError: {:2.3f}%'.format(vmape))

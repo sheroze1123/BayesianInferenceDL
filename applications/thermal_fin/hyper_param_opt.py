@@ -10,19 +10,19 @@ from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 #  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
 
 # Defines the hyperparameter space
-space = [Categorical(['relu', 'sigmoid', 'tanh'], name='activation'),
+space = [Categorical(['elu', 'sigmoid', 'tanh', 'relu'], name='activation'),
          Categorical([Adam, RMSprop, Adadelta], name='optimizer'),
-         Real(1e-4, 1, prior="log-uniform", name='lr'),
+         Real(1e-5, 1, prior="log-uniform", name='lr'),
          Integer(1, 6, name='n_hidden_layers'),
          Integer(10, 100, name='n_weights'),
-         Integer(10, 200, name='batch_size'),
-         Integer(100, 400, name='n_epochs')]
+         Integer(4, 200, name='batch_size'),
+         Integer(100, 600, name='n_epochs')]
 
 @use_named_args(space)
 def objective(**params):
     return parametric_model(**params)
 
-res_gp = gp_minimize(objective, space, n_calls=60, random_state=0)
+res_gp = gp_minimize(objective, space, n_calls=60, random_state=None)
 
 print("Best score: {}".format(res_gp.fun))
 print('''Best parameters:\n
