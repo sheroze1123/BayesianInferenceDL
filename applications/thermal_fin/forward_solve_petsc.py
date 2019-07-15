@@ -51,17 +51,10 @@ class Fin:
         # Reduced variables
         self._w_r = PETSc.Vec().createSeq(self.n_r)
         self._A_r = PETSc.Mat()
-        #  self._A_r = PETSc.Mat().createAIJ([self.n_r, self.n_r])
-        #  self._A_r.setUp()
-        #  self._A_r.assemblyBegin() # Make matrices useable.
-        #  self._A_r.assemblyEnd()
-        #  print(self._A_r.getSize())
         self._B_r = PETSc.Vec().createSeq(self.n_r)
         self._C_r = PETSc.Vec().createSeq(self.n_r)
 
         self.ksp = PETSc.KSP().create()
-        #  self.ksp.setFromOptions()
-        #  print ('Solving with: {}'.format(self.ksp.getType()))
 
         # Output temperature field
         self._w = Function(self.V)
@@ -206,21 +199,6 @@ class Fin:
         #  C_r = np.dot(C, phi)
         self.phi.multTranspose(C.vec(), self._C_r)
 
-        #  for i in range(81):
-            #  for j in range(81):
-                #  print(self._A_r.getValue(i, j), end=",")
-                #  print(Aphi.getValue(i, j), end=",")
-                #  print(self.A.mat().getValue(i, j), end=",")
-
-        #Solve reduced system to obtain x_r
-        #  x_r = np.linalg.solve(A_r, B_r)
-
-        #  PETSc.Options().setValue("ksp_type", "fgmres")
-        #  PETSc.Options().setValue("ksp_monitor", "")
-        #  PETSc.Options().setValue("ksp_converged_reason", "")
-        #  PETSc.Options().setValue("pc_type", "gamg")
-        #  self.ksp.setFromOptions()
-        #  self._A_r.solve(self._B_r, self._w_r)
         self.ksp.setOperators(A_r)
         self.ksp.solve(self._B_r, self._w_r)
         y_r = self._C_r.dot(self._w_r)
@@ -245,9 +223,6 @@ class Fin:
         
         self._k.assign(k)
         assemble(self._F, tensor=self.A)
-
-        #  A_m = A.array()
-        #  psi = np.dot(A_m, phi)
         return self.reduced_forward(self.A, self.B,self.C)
 
     def subfin_avg_op(self, w):
