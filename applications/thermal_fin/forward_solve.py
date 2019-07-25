@@ -27,6 +27,9 @@ class Fin:
         self.w = TrialFunction(V)
         self.v = TestFunction(V)
 
+        self.w_hat = TestFunction(V)
+        self.v_trial = TrialFunction(V)
+
         mesh = V.mesh()
         domains = MeshFunction("size_t", mesh, mesh.topology().dim())
         domains.set_all(0)
@@ -43,6 +46,7 @@ class Fin:
         self.ds = Measure('ds', domain=mesh, subdomain_data=boundaries)
 
         self._k = Function(V)
+
         self._F = inner(self._k * grad(self.w), grad(self.v)) * self.dx(0) + \
             self.v * self.Bi * self.w * self.ds(1)
         self._a = self.v * self.dx
@@ -50,6 +54,18 @@ class Fin:
         self.C, self.domain_measure = self.averaging_operator()
         self.A = PETScMatrix()
         self.dz_dk_T = self.full_grad_to_five_param()
+
+        self._adj_F = inner(self._k * grad(self.w_hat), grad(self.v_trial)) * self.dx(0) + \
+                self.Bi * self.w_hat * self.v_trial * self.ds(1)
+        self.A_adj = PETScMatrix()
+
+        self.middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=2)
+        self.fin1   = Expression("(((x[1] >=0.75) && (x[1] <= 1.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        self.fin2   = Expression("(((x[1] >=1.75) && (x[1] <= 2.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        self.fin3   = Expression("(((x[1] >=2.75) && (x[1] <= 3.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        self.fin4   = Expression("(((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+
+        self.B_obs = self.observation_operator()
 
         # Randomly sampling state vector for inverse problems
         #  self.n_samples = 3
@@ -71,16 +87,56 @@ class Fin:
          C - Averaging operator
         '''
 
+        z = Function(self.V)
+
         self._k.assign(k)
-        #  F, a = self.get_weak_forms(m)
+        solve(self._F == self._a, z) 
+        y = assemble(z * self.dx)/self.domain_measure
+        assemble(self._F, tensor=self.A)
+
+        return z, y, self.A.array(), self.B, self.C
+
+    def gradient(self, k, data):
+
+        if (np.allclose((np.linalg.norm(k.vector()[:])), 0.0)):
+            return 100 * np.ones(k.vector()[:].shape)
 
         z = Function(self.V)
+
+        self._k.assign(k)
         solve(self._F == self._a, z) 
+        pred_obs = np.dot(self.B_obs, z.vector()[:])
 
-        y = assemble(z * self.dx)/self.domain_measure
+        adj_RHS = -np.dot(self.B_obs.T, pred_obs - data)
+        assemble(self._adj_F, tensor=self.A_adj)
+        v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
 
-        assemble(self._F, tensor=self.A)
-        return z, y, self.A.array(), self.B, self.C
+        v = Function(self.V)
+        v.vector().set_local(v_nodal_vals)
+
+        k_hat = TestFunction(self.V)
+        grad_w_form = k_hat * inner(grad(z), grad(v)) * self.dx(0)
+        return assemble(grad_w_form)[:]
+
+    def averaged_reduced_fwd_and_grad(self, k, phi, data):
+        A_r, B_r, C_r, w_r, y_r = self.averaged_forward(k, phi)
+
+        reduced_fwd_obs = np.dot(np.dot(self.B_obs, phi), w_r)
+        
+        reduced_adj_rhs = - np.dot(np.dot(self.B_obs, phi).T, reduced_fwd_obs - data)
+
+        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
+
+        k_hat = TestFunction(self.V)
+        phi_w_r = Function(self.V)
+        phi_w_r.vector().set_local(np.dot(phi, w_r))
+        phi_v_r = Function(self.V)
+        phi_v_r.vector().set_local(np.dot(phi, v_r))
+
+        # TODO: Verify this!
+        reduced_grad_w_form = k_hat * inner(grad(phi_w_r), grad(phi_v_r)) * dx
+
+        return w_r, assemble(reduced_grad_w_form)[:]
 
     def averaging_operator(self):
         '''
@@ -108,7 +164,6 @@ class Fin:
 
     def reduced_qoi_operator(self, z_r):
         z_nodal_vals = np.dot(self.phi, z_r)
-        #  z_nodal_vals = self.phi.mult(z_r)
         z_tilde = Function(self.V)
         z_tilde.vector().set_local(z_nodal_vals)
         return self.qoi_operator(z_tilde)
@@ -137,17 +192,12 @@ class Fin:
 
         self.phi = phi
         A_r = np.dot(psi.T, np.dot(A, phi))
-        # A_r = psi.transposeMatMult(A.matMult(phi))
         B_r = np.dot(psi.T, B)
-        # B_r = psi.transposeMatMult(B)
         C_r = np.dot(C, phi)
-        # C_r = C.matMult(phi)
 
         #Solve reduced system to obtain x_r
         x_r = np.linalg.solve(A_r, B_r)
-        #  A_r.solve(B_r, x_r)
         y_r = np.dot(C_r, x_r)
-        # C_r.mult(x_r, y_r)
 
         return A_r, B_r, C_r, x_r, y_r
 
@@ -173,27 +223,16 @@ class Fin:
 
         A_m = self.A.array()
         psi = np.dot(A_m, phi)
-        # A_m.matMult(phi, psi)
         return self.reduced_forward(A_m, self.B,self.C, psi, phi)
 
     def subfin_avg_op(self, z):
         # Subfin averages
-        middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=2)
-        fin1 = Expression("(((x[1] >=0.75) && (x[1] <= 1.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
-        fin2 = Expression("(((x[1] >=1.75) && (x[1] <= 2.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
-        fin3 = Expression("(((x[1] >=2.75) && (x[1] <= 3.0)) && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
-        fin4 = Expression("(((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
+        middle_avg = assemble(self.middle * z * self.dx)
+        fin1_avg = assemble(self.fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
+        fin2_avg = assemble(self.fin2 * z * self.dx)/0.25 
+        fin3_avg = assemble(self.fin3 * z * self.dx)/0.25 
+        fin4_avg = assemble(self.fin4 * z * self.dx)/0.25 
 
-        middle_avg = assemble(middle * z * self.dx)
-        fin1_avg = assemble(fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
-        fin2_avg = assemble(fin2 * z * self.dx)/0.25 
-        fin3_avg = assemble(fin3 * z * self.dx)/0.25 
-        fin4_avg = assemble(fin4 * z * self.dx)/0.25 
-
-        # Better way to create all of this at once with assemble?
-        #  subfin_avgs = PETScVector()
-        #  subfin_avgs.init(5)
-        #  subfin_avgs.set_local([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
         subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg])
 
         return subfin_avgs
@@ -227,6 +266,27 @@ class Fin:
             dz_dk_T[i,:] = k.vector()[:]
 
         return dz_dk_T
+
+    def observation_operator(self):
+        z = TestFunction(self.V)
+        middle_avg = assemble(self.middle * z * self.dx)
+        fin1_avg = assemble(self.fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
+        fin2_avg = assemble(self.fin2 * z * self.dx)/0.25 
+        fin3_avg = assemble(self.fin3 * z * self.dx)/0.25 
+        fin4_avg = assemble(self.fin4 * z * self.dx)/0.25 
+
+        B = np.vstack((middle_avg[:],
+            fin1_avg[:],
+            fin2_avg[:],
+            fin3_avg[:],
+            fin4_avg[:]))
+
+        return B
+
+    def d_sigma_d_k(self):
+        grad = np.zeros((self.V.dim(), self.V.dim()))
+        B = self.B_obs
+
 
 def get_space(resolution):
     # Create the thermal fin geometry as referenced in Tan's thesis
