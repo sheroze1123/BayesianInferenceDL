@@ -66,6 +66,7 @@ class Fin:
         self.fin4   = Expression("(((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))", degree=2)
 
         self.B_obs = self.observation_operator()
+        self.ds_dk = self.dsigma_dk()
 
         # Randomly sampling state vector for inverse problems
         #  self.n_samples = 3
@@ -134,7 +135,7 @@ class Fin:
         phi_v_r.vector().set_local(np.dot(phi, v_r))
 
         # TODO: Verify this!
-        reduced_grad_w_form = k_hat * inner(grad(phi_w_r), grad(phi_v_r)) * dx
+        reduced_grad_w_form = k_hat * self.ds_dk *  inner(grad(phi_w_r), grad(phi_v_r)) * dx
 
         return w_r, assemble(reduced_grad_w_form)[:]
 
@@ -283,9 +284,14 @@ class Fin:
 
         return B
 
-    def d_sigma_d_k(self):
-        grad = np.zeros((self.V.dim(), self.V.dim()))
-        B = self.B_obs
+    def dsigma_dk(self):
+        ds_dk = interpolate(Expression("k_5 * ((x[0] >= 2.5) && (x[0] <= 3.5)) \
+           + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+           + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+           + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
+           + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))",\
+                  degree=1, k_1=4.0, k_2=4.0, k_3=4.0, k_4=4.0, k_5=1.0), self.V)
+        return ds_dk
 
 
 def get_space(resolution):
