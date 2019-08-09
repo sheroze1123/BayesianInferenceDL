@@ -3,6 +3,7 @@ import numpy as np
 from mshr import Rectangle, generate_mesh
 from forward_solve import get_space
 import matplotlib.pyplot as plt
+import time
 
 class SubFin(SubDomain):
     def __init__(self, subfin_bdry, **kwargs):
@@ -158,6 +159,11 @@ class AffineROMFin:
         self.data = None
         self.B_obs = self.observation_operator()
 
+        self.dA_dsigmak = []
+        for i in range(len(self.averaged_k_s)):
+            self.dA_dsigmak.append(
+                    assemble(inner(grad(self.w), grad(self.v))  * self.dx(i+1)).array())
+
     def forward(self, k):
         '''
         Computes the forward solution given a conductivity field
@@ -194,6 +200,8 @@ class AffineROMFin:
             w : numpy array     - reduced solution
         '''
 
+        t_i = time.time()
+
         k_s = self.subfin_avg_op(k)
 
         for i in range(len(k_s)):
@@ -207,6 +215,9 @@ class AffineROMFin:
         
         w_r = np.linalg.solve(A_r, B_r)
 
+        t_f = time.time()
+        print("Reduced forward time taken: {}\n".format(t_f - t_i))
+
         return w_r
 
     def qoi(self, w):
@@ -218,7 +229,6 @@ class AffineROMFin:
         return self.subfin_avg_op(w)
 
     def grad(self, k):
-
         k_s = self.subfin_avg_op(k)
         for i in range(len(k_s)):
             self.averaged_k_s[i].assign(k_s[i])
@@ -227,16 +237,31 @@ class AffineROMFin:
         solve(self._F == self._a, z) 
         pred_obs = self.qoi(z)
 
+        v = Function(self.V)
         adj_RHS = -np.dot(self.B_obs.T, pred_obs - self.data)
         assemble(self._adj_F, tensor=self.A_adj)
         v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
-
-        v = Function(self.V)
         v.vector().set_local(v_nodal_vals)
 
         dL_dsigmak = np.zeros(len(self.averaged_k_s))
         for i in range(len(dL_dsigmak)):
             dL_dsigmak[i] = assemble(inner(grad(z), grad(v)) * self.dx(i+1))
+
+        return np.dot(self.B_obs.T, dL_dsigmak)
+
+    def grad_reduced(self, k):
+        w_r = self.forward_reduced(k)
+
+        reduced_fwd_obs = np.dot(self.B_obs, np.dot(self.phi, w_r))
+
+        reduced_adj_rhs = - np.dot(np.dot(self.B_obs, self.phi).T, reduced_fwd_obs - self.data)
+
+        psi = np.dot(self.A.array(), self.phi) 
+        v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
+
+        dL_dsigmak = np.zeros(len(self.averaged_k_s))
+        for i in range(len(self.averaged_k_s)):
+            dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), self.phi), w_r))
 
         return np.dot(self.B_obs.T, dL_dsigmak)
 
@@ -263,15 +288,9 @@ class AffineROMFin:
         fin7_avg = assemble(k * self.dx(7))/self.fin7_A 
         fin8_avg = assemble(k * self.dx(8))/self.fin8_A 
         fin9_avg = assemble(k * self.dx(9))/self.fin9_A 
-
-        #  import pdb; pdb.set_trace()
-
         subfin_avgs = np.array([fin1_avg, fin2_avg, fin3_avg, fin4_avg, fin5_avg, 
             fin6_avg, fin7_avg, fin8_avg, fin9_avg])
-
-
-        print("Subfin averages: {}".format(subfin_avgs))
-
+        #  print("Subfin averages: {}".format(subfin_avgs))
         return subfin_avgs
 
     def observation_operator(self):
@@ -296,5 +315,7 @@ class AffineROMFin:
             fin7_avg[:],
             fin8_avg[:],
             fin9_avg[:]))
+
+        np.savetxt('B_obs.txt', B, delimiter=",")
 
         return B

@@ -62,7 +62,6 @@ w = solverROM.forward(k_true)
 data = solverROM.qoi(w)
 solverROM.set_data(data)
 
-
 grad = solverROM.grad(k_pt)
 
 qoi_0 = solverROM.qoi(w_A)
@@ -92,10 +91,48 @@ for i in range(n_eps):
     # Error b/w finite diff approx to gradient at given eps and adj
     err_grad[i] = abs( (Pi_plus - Pi_0)/eps[i] - dir_grad )
 
-plt.figure()    
 plt.loglog(eps, err_grad, "-ob", label="Error Grad")
 plt.loglog(eps, (.5*err_grad[0]/eps[0])*eps, "-.k", label="First Order")
 plt.title("Finite difference check of the first variation FOM")
+plt.xlabel("eps")
+plt.ylabel("Error grad")
+plt.legend(loc = "upper left")
+plt.show()
+
+grad_r = solverROM.grad_reduced(k_pt)
+
+w_R = solverROM.forward_reduced(k)
+qoi_0 = solverROM.qoi_reduced(w_R)
+Pi_0 = np.square(qoi_0 - data).sum()/2
+
+# Number of successive finite difference epsilons
+n_eps = 15
+eps = 1e-2*np.power(2., -np.arange(n_eps))
+err_grad = np.zeros(n_eps)
+
+k = dl.Function(V)
+
+# Compute FOM adjoint method based gradient
+k_hat = dl.Function(V).vector()
+k_hat.set_local(np.random.randn(V.dim()))
+k_hat.apply("")
+dir_grad = np.dot(grad_r, k_hat[:])
+
+for i in range(n_eps):
+    k.assign(k_pt)
+    k.vector().axpy(eps[i], k_hat) #uh = uh + eps[i]*dir
+
+    w_R = solverROM.forward_reduced(k)
+    qoi_plus = solverROM.qoi_reduced(w_R)
+    Pi_plus = np.square(qoi_plus - data).sum()/2
+
+    # Error b/w finite diff approx to gradient at given eps and adj
+    fd_grad = (Pi_plus - Pi_0)/eps[i]
+    err_grad[i] = abs(fd_grad - dir_grad)
+
+plt.loglog(eps, err_grad, "-ob", label="Error Grad")
+plt.loglog(eps, (.5*err_grad[0]/eps[0])*eps, "-.k", label="First Order")
+plt.title("Finite difference check of the first variation ROM")
 plt.xlabel("eps")
 plt.ylabel("Error grad")
 plt.legend(loc = "upper left")

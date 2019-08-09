@@ -352,21 +352,7 @@ class Fin:
         '''
         Same as five_param_to_function but does not assume symmetry.
         '''
-        #  k5, k1, k2, k3, k4, k6, k7, k8, k9 = k_s
         return interpolate(SubfinValExpr(k_s, degree=1), self.V)
-        
-        #  k = interpolate(Expression("k_5 * ((x[0] >= 2.5) && (x[0] <= 3.5)) \
-           #  + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0)) && (x[0] < 2.5)) \
-           #  + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0)) && (x[0] < 2.5)) \
-           #  + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0)) && (x[0] < 2.5)) \
-           #  + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0)) && (x[0] < 2.5)) \
-           #  + k_6 * (((x[1] >=3.75) && (x[1] <= 4.0)) && (x[0] > 3.5)) \
-           #  + k_7 * (((x[1] >=2.75) && (x[1] <= 3.0)) && (x[0] > 3.5)) \
-           #  + k_8 * (((x[1] >=1.75) && (x[1] <= 2.0)) && (x[0] > 3.5)) \
-           #  + k_9 * (((x[1] >=0.75) && (x[1] <= 1.0)) && (x[0] > 3.5))", \
-                  #  degree=1, k_1=k1, k_2=k2, k_3=k3, k_4=k4, k_5=k5, 
-                  #  k_6=k6, k_7=k7, k_8=k8, k_9=k9), self.V)
-        #  return k
 
     def full_grad_to_five_param(self):
         dz_dk_T = np.zeros((5,self.dofs))
@@ -380,18 +366,7 @@ class Fin:
         return dz_dk_T
 
     def observation_operator(self):
-        z = TestFunction(self.V)
-        middle_avg = assemble(self.middle * z * self.dx)
-        fin1_avg = assemble(self.fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
-        fin2_avg = assemble(self.fin2 * z * self.dx)/0.25 
-        fin3_avg = assemble(self.fin3 * z * self.dx)/0.25 
-        fin4_avg = assemble(self.fin4 * z * self.dx)/0.25 
-
-        B = np.vstack((middle_avg[:],
-            fin1_avg[:],
-            fin2_avg[:],
-            fin3_avg[:],
-            fin4_avg[:]))
+        B = np.loadtxt("B_obs.txt", delimiter=",")
 
         return B
 
