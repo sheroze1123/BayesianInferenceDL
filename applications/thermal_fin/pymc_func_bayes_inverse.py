@@ -1,7 +1,8 @@
 import pymc3 as pm
 import numpy as np
 import dolfin as dl; dl.set_log_level(40)
-from forward_solve import Fin, get_space
+from forward_solve import Fin
+from thermal_Fin import get_space
 from averaged_affine_ROM import AffineROMFin 
 from dl_model import load_parametric_model_avg
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
@@ -9,8 +10,10 @@ from theano.compile.ops import as_op
 import theano.tensor as tt
 from gaussian_field import make_cov_chol
 import theano
+import tensorflow as tf
 import time
 import matplotlib.pyplot as plt
+from keras import backend as k
 
 class SqError:
     def __init__(self, V, chol):
@@ -27,6 +30,7 @@ class SqError:
         self.obs_data = self._solver.qoi_operator(w)
         self._solver_r.set_reduced_basis(self.phi)
         self._solver_r.set_data(self.obs_data)
+        self._err_model = load_parametric_model_avg('elu', Adam, 0.129, 3, 58, 64, 466, V.dim())
 
     def err_grad_FOM(self, pred_k):
         self._pred_k.vector().set_local(pred_k)
@@ -43,6 +47,16 @@ class SqError:
         err_r = np.square(qoi_r - self.obs_data).sum()/2.0
         grad_r = self._solver_r.grad_reduced(self._pred_k)
         return err_r, grad_r
+
+    def err_grad_ROMML(self, pred_k):
+        self._pred_k.vector().set_local(pred_k)
+        w_r = self._solver_r.forward_reduced(self._pred_k)
+        qoi_r = self._solver_r.qoi_reduced(w_r)
+        err_NN = self.model.predict(pred_k)
+        qoi_tilde = qoi_r + err_NN
+        err_t = np.square(qoi_t - self.obs_data).sum()/2.0
+        grad_t = self._solver_r.grad_romml(self._pred_k)
+        return err_t, grad_t
 
 class SqErrorOpROM(theano.Op):
     itypes = [tt.dvector]

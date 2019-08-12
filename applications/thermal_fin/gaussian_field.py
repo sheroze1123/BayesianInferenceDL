@@ -1,10 +1,10 @@
-from forward_solve import get_space
+from thermal_fin import get_space
 import numpy as np
 from scipy import linalg, spatial
 from fenics import Function, plot
 import matplotlib.pyplot as plt
 
-def make_cov_chol(V, kern_type='m52', length=0.8):
+def make_cov_chol(V, kern_type='m52', length=1.6):
     Wdofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))
     V0_dofs = V.dofmap().dofs()
     points = Wdofs_x[V0_dofs, :] 

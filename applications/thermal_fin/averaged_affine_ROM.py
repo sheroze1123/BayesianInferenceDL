@@ -1,8 +1,10 @@
 from dolfin import *
 import numpy as np
 from mshr import Rectangle, generate_mesh
-from forward_solve import get_space
+from thermal_fin import get_space
 import matplotlib.pyplot as plt
+from tensorflow.keras.backend import get_session, gradients
+import tensorflow as tf
 import time
 
 class SubFin(SubDomain):
@@ -164,6 +166,8 @@ class AffineROMFin:
             self.dA_dsigmak.append(
                     assemble(inner(grad(self.w), grad(self.v))  * self.dx(i+1)).array())
 
+        self.dl_model = None
+
     def forward(self, k):
         '''
         Computes the forward solution given a conductivity field
@@ -200,7 +204,7 @@ class AffineROMFin:
             w : numpy array     - reduced solution
         '''
 
-        t_i = time.time()
+        #  t_i = time.time()
 
         k_s = self.subfin_avg_op(k)
 
@@ -215,8 +219,8 @@ class AffineROMFin:
         
         w_r = np.linalg.solve(A_r, B_r)
 
-        t_f = time.time()
-        print("Reduced forward time taken: {}\n".format(t_f - t_i))
+        #  t_f = time.time()
+        #  print("Reduced forward time taken: {}\n".format(t_f - t_i))
 
         return w_r
 
@@ -265,6 +269,32 @@ class AffineROMFin:
 
         return np.dot(self.B_obs.T, dL_dsigmak)
 
+    def grad_romml(self, k):
+        w_r = self.forward_reduced(k)
+
+        reduced_fwd_obs = np.dot(self.B_obs, np.dot(self.phi, w_r))
+        romml_fwd_obs = reduced_fwd_obs + self.dl_model.predict([[k.vector()[:]]])[0]
+
+        reduced_adj_rhs = - np.dot(np.dot(self.B_obs, self.phi).T, romml_fwd_obs - self.data)
+
+        psi = np.dot(self.A.array(), self.phi) 
+        v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
+
+        dL_dsigmak = np.zeros(len(self.averaged_k_s))
+        for i in range(len(self.averaged_k_s)):
+            dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), self.phi), w_r))
+
+        f_x_dp_x = np.dot(self.B_obs.T, dL_dsigmak)
+
+        loss = tf.divide(tf.reduce_sum(tf.square(
+            self.data - reduced_fwd_obs - self.dl_model.layers[-1].output)), 2)
+        session = get_session()
+        x_inp = [k.vector()[:]]
+        f_eps_dp_eps = session.run(gradients(loss, self.dl_model.input), 
+                feed_dict={self.dl_model.input: x_inp})
+
+        return f_x_dp_x + f_eps_dp_eps
+
     def set_reduced_basis(self, phi):
         '''
         Sets the computed trial basis for the ROM system
@@ -276,6 +306,9 @@ class AffineROMFin:
 
     def set_data(self, data):
         self.data = data
+
+    def set_dl_model(self, model):
+        self.dl_model = model
 
     def subfin_avg_op(self, k):
         # Subfin averages

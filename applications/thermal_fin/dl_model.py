@@ -7,7 +7,7 @@ from dolfin import set_log_level; set_log_level(40)
 from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from tensorflow.keras.layers import Dropout, Dense
-from generate_fin_dataset import generate_five_param_np, gen_five_param_subfin_avg, gen_avg_rom_dataset
+from generate_fin_dataset import generate_five_param_np, gen_affine_avg_rom_dataset
 
 def load_dataset(load_prev=True, tr_size=4000, v_size=200):
     if os.path.isfile('data/z_train_np.txt') and load_prev:
@@ -56,21 +56,21 @@ def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
     Load dataset where the conductivity is parametrized as a FEniCS function
     and the QoI is the averaged temperature per subfin
     '''
-    if os.path.isfile('data/z_avg_tr.txt') and load_prev:
-        z_train = np.loadtxt('data/z_avg_tr.txt', delimiter=',')
-        errors_train =  np.loadtxt('data/errors_avg_tr.txt', delimiter=',')
+    if os.path.isfile('data/z_aff_avg_tr.txt') and load_prev:
+        z_train = np.loadtxt('data/z_aff_avg_tr.txt', delimiter=',')
+        errors_train =  np.loadtxt('data/errors_aff_avg_tr.txt', delimiter=',')
     else:
-        (z_train, errors_train) = gen_avg_rom_dataset(tr_size)
-        np.savetxt('data/z_avg_tr.txt', z_train, delimiter=',')
-        np.savetxt('data/errors_avg_tr.txt', errors_train, delimiter=',')
+        (z_train, errors_train) = gen_affine_avg_rom_dataset(tr_size)
+        np.savetxt('data/z_aff_avg_tr.txt', z_train, delimiter=',')
+        np.savetxt('data/errors_aff_avg_tr.txt', errors_train, delimiter=',')
 
-    if os.path.isfile('data/z_avg_eval.txt') and load_prev:
-        z_val = np.loadtxt('data/z_avg_eval.txt', delimiter=',')
-        errors_val =  np.loadtxt('data/errors_avg_eval.txt', delimiter=',')
+    if os.path.isfile('data/z_aff_avg_eval.txt') and load_prev:
+        z_val = np.loadtxt('data/z_aff_avg_eval.txt', delimiter=',')
+        errors_val =  np.loadtxt('data/errors_aff_avg_eval.txt', delimiter=',')
     else:
-        (z_val, errors_val) = gen_avg_rom_dataset(v_size)
-        np.savetxt('data/z_avg_eval.txt', z_val, delimiter=',')
-        np.savetxt('data/errors_avg_eval.txt', errors_val, delimiter=',')
+        (z_val, errors_val) = gen_affine_avg_rom_dataset(v_size)
+        np.savetxt('data/z_aff_avg_eval.txt', z_val, delimiter=',')
+        np.savetxt('data/errors_aff_avg_eval.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -113,7 +113,7 @@ def parametric_model(activation,
             model.add(Dense(n_weights, activation=activation, input_shape=(input_shape,)))
         else:
             model.add(Dense(n_weights, activation=activation))
-    model.add(Dense(5))
+    model.add(Dense(9))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
     history = model.fit(z_train, errors_train, epochs=n_epochs, batch_size=batch_size,
             validation_data=(z_val, errors_val))
@@ -171,7 +171,7 @@ def load_parametric_model_avg(activation,
             model.add(Dense(n_weights, activation=activation, input_shape=(input_shape,)))
         else:
             model.add(Dense(n_weights, activation=activation))
-    model.add(Dense(5))
+    model.add(Dense(9))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
 
     if os.path.isfile('data/keras_model_avg_best.index'):
@@ -185,7 +185,7 @@ def load_parametric_model_avg(activation,
 
     return model
 
-#  vmape = parametric_model('relu', Adam, 0.0012, 6, 58, 90, 400)
+#  vmape = parametric_model('elu', Adam, 0.0003, 5, 58, 200, 2000)
 #  print ('\nError: {:2.3f}%'.format(vmape))
 
 #  z_train, errors_train = gen_avg_rom_dataset(4000)

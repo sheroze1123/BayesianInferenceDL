@@ -1,6 +1,7 @@
 from dolfin import *
 import numpy as np
 from mshr import Rectangle, generate_mesh
+from averaged_affine_ROM import SubFin, CenterFin, SubFinBoundary, CenterFinBoundary  
 
 class SubfinExpr(UserExpression):
     def __init__(self, subfin_bdry, **kwargs):
@@ -26,7 +27,7 @@ class SubfinExpr(UserExpression):
 
 class SubfinValExpr(UserExpression):
     def __init__(self, k_s, **kwargs):
-        self.k5, self.k1, self.k2, self.k3, self.k4, self.k6, self.k7, self.k8, self.k9 = k_s
+        self.k1, self.k2, self.k3, self.k4, self.k5, self.k6, self.k7, self.k8, self.k9 = k_s
         super(SubfinValExpr, self).__init__(**kwargs)
     def eval(self, value, x):
         if (x[0] >= 2.5) and (x[0] <= 3.5):
@@ -88,6 +89,27 @@ class Fin:
         domains = MeshFunction("size_t", mesh, mesh.topology().dim())
         domains.set_all(0)
 
+        self.fin1 = SubFin([0.75, True])
+        self.fin2 = SubFin([1.75, True])
+        self.fin3 = SubFin([2.75, True])
+        self.fin4 = SubFin([3.75, True])
+        self.fin5 = CenterFin()
+        self.fin6 = SubFin([3.75, False])
+        self.fin7 = SubFin([2.75, False])
+        self.fin8 = SubFin([1.75, False])
+        self.fin9 = SubFin([0.75, False])
+        domains_sub = MeshFunction("size_t", mesh, mesh.topology().dim())
+        domains_sub.set_all(0)
+        self.fin1.mark(domains_sub, 1)
+        self.fin2.mark(domains_sub, 2)
+        self.fin3.mark(domains_sub, 3)
+        self.fin4.mark(domains_sub, 4)
+        self.fin5.mark(domains_sub, 5)
+        self.fin6.mark(domains_sub, 6)
+        self.fin7.mark(domains_sub, 7)
+        self.fin8.mark(domains_sub, 8)
+        self.fin9.mark(domains_sub, 9)
+
         # Marking boundaries for boundary conditions
         bottom = CompiledSubDomain("near(x[1], side) && on_boundary", side = 0.0)
         exterior = CompiledSubDomain("!near(x[1], side) && on_boundary", side = 0.0)
@@ -98,6 +120,7 @@ class Fin:
 
         self.dx = Measure('dx', domain=mesh, subdomain_data=domains)
         self.ds = Measure('ds', domain=mesh, subdomain_data=boundaries)
+        self.dx_s = Measure('dx', domain=mesh, subdomain_data=domains_sub)
 
         self._k = Function(V)
 
@@ -107,35 +130,22 @@ class Fin:
         self.B = assemble(self._a)[:]
         self.C, self.domain_measure = self.averaging_operator()
         self.A = PETScMatrix()
-        self.dz_dk_T = self.full_grad_to_five_param()
 
         self._adj_F = inner(self._k * grad(self.w_hat), grad(self.v_trial)) * self.dx(0) + \
                 self.Bi * self.w_hat * self.v_trial * self.ds(1)
         self.A_adj = PETScMatrix()
 
-        self.middle = Expression("((x[0] >= 2.5) && (x[0] <= 3.5))", degree=1)
-
-
-        self.fin1 = SubfinExpr([0.75, True], degree=1)
-        self.fin2 = SubfinExpr([1.75, True], degree=1)
-        self.fin3 = SubfinExpr([2.75, True], degree=1)
-        self.fin4 = SubfinExpr([3.75, True], degree=1)
-        self.fin6 = SubfinExpr([3.75, False], degree=1)
-        self.fin7 = SubfinExpr([2.75, False], degree=1)
-        self.fin8 = SubfinExpr([1.75, False], degree=1)
-        self.fin9 = SubfinExpr([0.75, False], degree=1)
-
-        #  self.fin6   = Expression("((x[1] >=3.75) && (x[1] <= 4.0)) && (x[0] > 3.5)", degree=2)
-        #  self.fin7   = Expression("((x[1] >=2.75) && (x[1] <= 3.0)) && (x[0] > 3.5)", degree=2)
-        #  self.fin8   = Expression("((x[1] >=1.75) && (x[1] <= 2.0)) && (x[0] > 3.5)", degree=2)
-        #  self.fin9   = Expression("((x[1] >=0.75) && (x[1] <= 1.0)) && (x[0] > 3.5)", degree=2)
-        #  self.fin1   = Expression("((x[1] >=0.75) && (x[1] <= 1.0)) && (x[0] < 2.5)", degree=2)
-        #  self.fin2   = Expression("((x[1] >=1.75) && (x[1] <= 2.0)) && (x[0] < 2.5)", degree=2)
-        #  self.fin3   = Expression("((x[1] >=2.75) && (x[1] <= 3.0)) && (x[0] < 2.5)", degree=2)
-        #  self.fin4   = Expression("((x[1] >=3.75) && (x[1] <= 4.0)) && (x[0] < 2.5)", degree=2)
+        self.fin1_A = assemble(Constant(1.0) * self.dx_s(1))
+        self.fin2_A = assemble(Constant(1.0) * self.dx_s(2))
+        self.fin3_A = assemble(Constant(1.0) * self.dx_s(3))
+        self.fin4_A = assemble(Constant(1.0) * self.dx_s(4))
+        self.fin5_A = assemble(Constant(1.0) * self.dx_s(5))
+        self.fin6_A = assemble(Constant(1.0) * self.dx_s(6))
+        self.fin7_A = assemble(Constant(1.0) * self.dx_s(7))
+        self.fin8_A = assemble(Constant(1.0) * self.dx_s(8))
+        self.fin9_A = assemble(Constant(1.0) * self.dx_s(9))
 
         self.B_obs = self.observation_operator()
-        self.ds_dk = self.dsigma_dk()
 
         # Randomly sampling state vector for inverse problems
         #  self.n_samples = 3
@@ -187,37 +197,6 @@ class Fin:
         k_hat = TestFunction(self.V)
         grad_w_form = k_hat * inner(grad(z), grad(v)) * self.dx(0)
         return assemble(grad_w_form)[:]
-
-    def averaged_reduced_fwd_and_grad(self, k, phi, data):
-
-        self._k.assign(k)
-        assemble(self._F, tensor=self.A)
-        A_arr = self.A.array()
-        A_r, B_r, C_r, w_r, y_r = self.averaged_forward(k, phi)
-
-        reduced_fwd_obs = np.dot(np.dot(self.B_obs, phi), w_r)
-        
-        reduced_adj_rhs = - np.dot(np.dot(self.B_obs, phi).T, reduced_fwd_obs - data)
-
-        #  v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
-
-        psi = np.dot(A_arr, phi) 
-        v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
-        #  v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
-
-        k_hat = TestFunction(self.V)
-        phi_w_r = Function(self.V)
-        phi_w_r.vector().set_local(np.dot(phi, w_r))
-        phi_v_r = Function(self.V)
-        phi_v_r.vector().set_local(np.dot(phi, v_r))
-
-        # TODO: Verify this!
-        #  reduced_grad_w_form = k_hat * self.ds_dk *  inner(grad(phi_w_r), grad(phi_v_r)) * dx
-        reduced_grad_w_form = k_hat *  inner(grad(phi_w_r), grad(phi_v_r)) * dx
-        dsdk_v = assemble(reduced_grad_w_form)[:]
-        g = np.dot(self.ds_dk.T, dsdk_v)
-
-        return w_r, g
 
     def averaging_operator(self):
         '''
@@ -282,71 +261,33 @@ class Fin:
 
         return A_r, B_r, C_r, x_r, y_r
 
-    def averaged_forward(self, m, phi):
-        '''
-        Given thermal conductivity as a FEniCS function, uses subfin averages
-        to reduce the parameter dimension and performs a ROM solve given 
-        the reduced basis phi
-        '''
-
-        #TODO: INCORRECT! Use the affine decomposition to make this far simpler
-        return self.r_fwd_no_full_9_param(self.subfin_avg_op(m), phi)
-
-    def r_fwd_no_full_9_param(self, k_s, phi):
-        return self.r_fwd_no_full(self.nine_param_to_function(k_s), phi)
-
-    def r_fwd_no_full_5_param(self, k_s, phi):
-        return self.r_fwd_no_full(self.five_param_to_function(k_s), phi)
-
     def r_fwd_no_full(self, k, phi):
         '''
         Solves the reduced system without solving the full system
         '''
         
         self._k.assign(k)
-        #  F, a = self.get_weak_forms(m)
         assemble(self._F, tensor=self.A)
 
         A_m = self.A.array()
         psi = np.dot(A_m, phi)
         return self.reduced_forward(A_m, self.B,self.C, psi, phi)
 
-    def subfin_avg_op(self, z):
+    def subfin_avg_op(self, k):
         # Subfin averages
-        middle_avg = assemble(self.middle * z * self.dx)
-        fin1_avg = assemble(self.fin1 * z * self.dx)/0.25 #0.25 is the area of the subfin
-        fin2_avg = assemble(self.fin2 * z * self.dx)/0.25 
-        fin3_avg = assemble(self.fin3 * z * self.dx)/0.25 
-        fin4_avg = assemble(self.fin4 * z * self.dx)/0.25 
-        fin6_avg = assemble(self.fin6 * z * self.dx)/0.25 #0.25 is the area of the subfin
-        fin7_avg = assemble(self.fin7 * z * self.dx)/0.25 
-        fin8_avg = assemble(self.fin8 * z * self.dx)/0.25 
-        fin9_avg = assemble(self.fin9 * z * self.dx)/0.25 
-
-        subfin_avgs = np.array([middle_avg, fin1_avg, fin2_avg, fin3_avg, fin4_avg, 
+        fin1_avg = assemble(k * self.dx_s(1))/self.fin1_A 
+        fin2_avg = assemble(k * self.dx_s(2))/self.fin2_A 
+        fin3_avg = assemble(k * self.dx_s(3))/self.fin3_A 
+        fin4_avg = assemble(k * self.dx_s(4))/self.fin4_A 
+        fin5_avg = assemble(k * self.dx_s(5))/self.fin5_A
+        fin6_avg = assemble(k * self.dx_s(6))/self.fin6_A 
+        fin7_avg = assemble(k * self.dx_s(7))/self.fin7_A 
+        fin8_avg = assemble(k * self.dx_s(8))/self.fin8_A 
+        fin9_avg = assemble(k * self.dx_s(9))/self.fin9_A 
+        subfin_avgs = np.array([fin1_avg, fin2_avg, fin3_avg, fin4_avg, fin5_avg, 
             fin6_avg, fin7_avg, fin8_avg, fin9_avg])
-
+        #  print("Subfin averages: {}".format(subfin_avgs))
         return subfin_avgs
-
-    def five_param_to_function(self, k_s):
-        '''
-        A simpler thermal conductivity problem is the case where each fin has a constant 
-        conductivity instead of having a spatially varying conductivity. This function takes
-        in conductivity for each fin and returns a FEniCS function on the space. 
-        Assumes symmetry of the fin.
-
-        More info on Tan's thesis Pg. 80
-        '''
-
-        k1, k2, k3, k4, k5 = k_s
-        
-        k = interpolate(Expression("k_5 * ((x[0] >= 2.5) && (x[0] <= 3.5)) \
-           + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-           + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-           + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-           + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))",\
-                  degree=1, k_1=k1, k_2=k2, k_3=k3, k_4=k4, k_5=k5), self.V)
-        return k
 
     def nine_param_to_function(self, k_s):
         '''
@@ -354,59 +295,27 @@ class Fin:
         '''
         return interpolate(SubfinValExpr(k_s, degree=1), self.V)
 
-    def full_grad_to_five_param(self):
-        dz_dk_T = np.zeros((5,self.dofs))
-
-        for i in range(5):
-            impulse = np.zeros((5,))
-            impulse[i] = 1.0
-            k = self.five_param_to_function(impulse)
-            dz_dk_T[i,:] = k.vector()[:]
-
-        return dz_dk_T
-
     def observation_operator(self):
-        B = np.loadtxt("B_obs.txt", delimiter=",")
+        z = TestFunction(self.V)
+        fin1_avg = assemble(z * self.dx_s(1))/self.fin1_A 
+        fin2_avg = assemble(z * self.dx_s(2))/self.fin2_A 
+        fin3_avg = assemble(z * self.dx_s(3))/self.fin3_A 
+        fin4_avg = assemble(z * self.dx_s(4))/self.fin4_A 
+        fin5_avg = assemble(z * self.dx_s(5))/self.fin5_A
+        fin6_avg = assemble(z * self.dx_s(6))/self.fin6_A 
+        fin7_avg = assemble(z * self.dx_s(7))/self.fin7_A 
+        fin8_avg = assemble(z * self.dx_s(8))/self.fin8_A 
+        fin9_avg = assemble(z * self.dx_s(9))/self.fin9_A 
+
+        B = np.vstack((
+            fin1_avg[:],
+            fin2_avg[:],
+            fin3_avg[:],
+            fin4_avg[:],
+            fin5_avg[:],
+            fin6_avg[:],
+            fin7_avg[:],
+            fin8_avg[:],
+            fin9_avg[:]))
 
         return B
-
-    def dsigma_dk(self):
-        ds_dk = interpolate(Expression("k_5 * ((x[0] >= 2.5) && (x[0] <= 3.5)) \
-           + k_1 * (((x[1] >=0.75) && (x[1] <= 1.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-           + k_2 * (((x[1] >=1.75) && (x[1] <= 2.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-           + k_3 * (((x[1] >=2.75) && (x[1] <= 3.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))  \
-           + k_4 * (((x[1] >=3.75) && (x[1] <= 4.0))  && ((x[0] < 2.5) || (x[0] > 3.5)))",\
-                  degree=1, k_1=4.0, k_2=4.0, k_3=4.0, k_4=4.0, k_5=1.0), self.V)
-
-        B = self.B_obs
-
-        dsdk = np.zeros((B.shape[1], B.shape[1]))
-
-        for i in range(B.shape[0]):
-            nnz = np.nonzero(B[i,:])
-            if i == 0:
-                mult = 1.0
-            else:
-                mult = 4.0
-            for j in range(len(nnz)):
-                dsdk[j, nnz] = mult
-        return dsdk
-
-
-def get_space(resolution):
-    # Create the thermal fin geometry as referenced in Tan's thesis
-
-    geometry = Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \
-            + Rectangle(Point(0.0, 0.75), Point(2.5, 1.0)) \
-            + Rectangle(Point(0.0, 1.75), Point(2.5, 2.0)) \
-            + Rectangle(Point(0.0, 2.75), Point(2.5, 3.0)) \
-            + Rectangle(Point(0.0, 3.75), Point(2.5, 4.0)) \
-            + Rectangle(Point(3.5, 0.75), Point(6.0, 1.0)) \
-            + Rectangle(Point(3.5, 1.75), Point(6.0, 2.0)) \
-            + Rectangle(Point(3.5, 2.75), Point(6.0, 3.0)) \
-            + Rectangle(Point(3.5, 3.75), Point(6.0, 4.0)) \
-
-    mesh = generate_mesh(geometry, resolution)
-
-    V = FunctionSpace(mesh, 'CG', 1)
-    return V

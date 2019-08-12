@@ -1,9 +1,47 @@
 import numpy as np
 import tensorflow as tf
 from dolfin import *
-from forward_solve import Fin, get_space
+from forward_solve import Fin
+from thermal_fin import get_space
+from averaged_affine_ROM import AffineROMFin
 from pandas import read_csv
 from gaussian_field import make_cov_chol
+
+def gen_affine_avg_rom_dataset(dataset_size, resolution=40):
+    V = get_space(resolution)
+    chol = make_cov_chol(V, length=1.6)
+    z = Function(V)
+    solver = Fin(V)
+    solver_r = AffineROMFin(V)
+    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    solver_r.set_reduced_basis(phi)
+    qoi_errors = np.zeros((dataset_size, 9))
+
+    # TODO: Needs to be fixed for higher order functions
+    z_s = np.zeros((dataset_size, V.dim()))
+
+    for i in range(dataset_size):
+        norm = np.random.randn(len(chol))
+        nodal_vals = np.exp(0.5 * chol.T @ norm)
+        z.vector().set_local(nodal_vals)
+        z_s[i,:] = nodal_vals
+
+        x, y, A, B, C = solver.forward(z)
+        w_r = solver_r.forward_reduced(z)
+
+        qoi = solver.qoi_operator(x)
+        qoi_r = solver_r.qoi_reduced(w_r)
+
+        qoi_errors[i,:] = qoi - qoi_r
+
+    if (dataset_size > 1000):
+        np.savetxt('data/z_aff_avg_tr.txt', z_s, delimiter=",")
+        np.savetxt('data/errors_aff_avg_tr.txt', qoi_errors, delimiter=",")
+
+    if (dataset_size < 400):
+        np.savetxt('data/z_aff_avg_eval.txt', z_s, delimiter=",")
+        np.savetxt('data/errors_aff_avg_eval.txt', qoi_errors, delimiter=",")
+    return (z_s, qoi_errors)
 
 def gen_avg_rom_dataset(dataset_size, resolution=40):
     V = get_space(resolution)

@@ -1,4 +1,5 @@
-from forward_solve import Fin, get_space
+from forward_solve import Fin
+from thermal_fin import get_space
 from gaussian_field import make_cov_chol
 import dolfin as dl
 import numpy as np
