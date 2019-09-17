@@ -110,3 +110,4 @@ hippylib-2.1.0/
 data/keras_model*
 data/checkpoint
 data/best_vmape.txt
+data/*.txt
