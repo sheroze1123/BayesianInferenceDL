@@ -1,5 +1,4 @@
-# HROM_BIDL
-**H**ierarchical **R**educed **O**rder **M**odels in **B**ayesian **I**nversion augmented by **D**eep **L**earning
+# Bayesian Inference with Deep Learning and Reduced Order Models
 
 Ongoing work on improving reduced order models by better characterizing their error using deep learning methods.
 
