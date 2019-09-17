@@ -2,7 +2,7 @@ import pymc3 as pm
 import numpy as np
 import dolfin as dl; dl.set_log_level(40)
 from forward_solve import Fin
-from thermal_Fin import get_space
+from thermal_fin import get_space
 from averaged_affine_ROM import AffineROMFin 
 from dl_model import load_parametric_model_avg
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
@@ -10,10 +10,8 @@ from theano.compile.ops import as_op
 import theano.tensor as tt
 from gaussian_field import make_cov_chol
 import theano
-import tensorflow as tf
 import time
 import matplotlib.pyplot as plt
-from keras import backend as k
 
 class SqError:
     def __init__(self, V, chol):
@@ -30,7 +28,8 @@ class SqError:
         self.obs_data = self._solver.qoi_operator(w)
         self._solver_r.set_reduced_basis(self.phi)
         self._solver_r.set_data(self.obs_data)
-        self._err_model = load_parametric_model_avg('elu', Adam, 0.129, 3, 58, 64, 466, V.dim())
+        self._err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
+        self._solver_r.set_dl_model(self._err_model)
 
     def err_grad_FOM(self, pred_k):
         self._pred_k.vector().set_local(pred_k)
@@ -52,8 +51,8 @@ class SqError:
         self._pred_k.vector().set_local(pred_k)
         w_r = self._solver_r.forward_reduced(self._pred_k)
         qoi_r = self._solver_r.qoi_reduced(w_r)
-        err_NN = self.model.predict(pred_k)
-        qoi_tilde = qoi_r + err_NN
+        err_NN = self._err_model.predict([[pred_k]])[0]
+        qoi_t = qoi_r + err_NN
         err_t = np.square(qoi_t - self.obs_data).sum()/2.0
         grad_t = self._solver_r.grad_romml(self._pred_k)
         return err_t, grad_t
@@ -94,11 +93,30 @@ class SqErrorOpFOM(theano.Op):
         val, grad = self(*inputs)
         return [output_gradients[0] * grad] 
 
+class SqErrorOpROMML(theano.Op):
+    itypes = [tt.dvector]
+    otypes = [tt.dscalar, tt.dvector]
+    __props__ = ()
+
+    def __init__(self, V, chol):
+        self._error_op = SqError(V, chol)
+
+    def perform(self, node, inputs, outputs):
+        pred_k = inputs[0]
+        value, grad = self._error_op.err_grad_ROMML(pred_k)
+        outputs[0][0] = value
+        outputs[1][0] = grad
+
+    def grad(self, inputs, output_gradients):
+        val, grad = self(*inputs)
+        return [output_gradients[0] * grad] 
+
 resolution = 40
 V = get_space(resolution)
 chol = make_cov_chol(V, length=1.2)
 sq_err = SqErrorOpFOM(V, chol)
 sq_err_r = SqErrorOpROM(V, chol)
+sq_err_romml = SqErrorOpROMML(V, chol)
 
 norm = np.random.randn(len(chol))
 nodal_vals_start = np.exp(0.5 * chol.T @ norm)
@@ -122,7 +140,7 @@ with pm.Model() as misfit_model:
     #  step_method = pm.step_methods.metropolis.Metropolis()
     #  trace = pm.sample(1000,step=step_method, cores=1)
 
-    y = pm.Potential('y', -0.5 * sq_err_r(nodal_vals)[0] / sigma / sigma)
+    y = pm.Potential('y', -0.5 * sq_err_romml(nodal_vals)[0] / sigma / sigma)
     trace = pm.sample(200, cores=1, tune=200)
 
 pm.traceplot(trace)

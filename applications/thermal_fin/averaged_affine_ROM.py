@@ -265,7 +265,8 @@ class AffineROMFin:
 
         dL_dsigmak = np.zeros(len(self.averaged_k_s))
         for i in range(len(self.averaged_k_s)):
-            dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), self.phi), w_r))
+            dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), 
+                self.phi), w_r))
 
         return np.dot(self.B_obs.T, dL_dsigmak)
 
@@ -291,9 +292,9 @@ class AffineROMFin:
         session = get_session()
         x_inp = [k.vector()[:]]
         f_eps_dp_eps = session.run(gradients(loss, self.dl_model.input), 
-                feed_dict={self.dl_model.input: x_inp})
+                feed_dict={self.dl_model.input: x_inp})[0]
 
-        return f_x_dp_x + f_eps_dp_eps
+        return f_x_dp_x + f_eps_dp_eps.reshape(f_eps_dp_eps.size)
 
     def set_reduced_basis(self, phi):
         '''
