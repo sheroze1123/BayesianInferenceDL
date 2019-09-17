@@ -1,7 +1,40 @@
 from dolfin import *
 import numpy as np
 from mshr import Rectangle, generate_mesh
-from averaged_affine_ROM import SubFin, CenterFin, SubFinBoundary, CenterFinBoundary  
+
+class SubFin(SubDomain):
+    def __init__(self, subfin_bdry, **kwargs):
+        self.y_b = subfin_bdry[0]
+        self.is_left = subfin_bdry[1]
+        super(SubFin, self).__init__(**kwargs)
+
+    def inside(self, x, on_boundary):
+        if self.is_left:
+            return (between(x[1], (self.y_b, self.y_b+0.75)) and between(x[0], (0.0, 2.5)))
+        else:
+            return (between(x[1], (self.y_b, self.y_b+0.75)) and between(x[0], (3.5, 6.0)))
+
+class SubFinBoundary(SubDomain):
+    def __init__(self, subfin_bdry, **kwargs):
+        self.y_b = subfin_bdry[0]
+        self.is_left = subfin_bdry[1]
+        super(SubFinBoundary, self).__init__(**kwargs)
+
+    def inside(self, x, on_boundary):
+        if self.is_left:
+            return (on_boundary and between(x[1], (self.y_b, self.y_b+0.75)) 
+                    and between(x[0], (0.0, 2.5)))
+        else:
+            return (on_boundary and between(x[1], (self.y_b, self.y_b+0.75)) 
+                    and between(x[0], (3.5, 6.0)))
+
+class CenterFin(SubDomain):
+    def inside(self, x, on_boundary):
+        return between(x[0], (2.5, 3.5))
+
+class CenterFinBoundary(SubDomain):
+    def inside(self, x, on_boundary):
+        return (on_boundary and between(x[0], (2.5, 3.5)) and not (near(x[1], 0.0)))
 
 class SubfinExpr(UserExpression):
     def __init__(self, subfin_bdry, **kwargs):

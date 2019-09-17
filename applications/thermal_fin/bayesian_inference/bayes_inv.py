@@ -1,19 +1,24 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import sys
+sys.path.append('../')
+
+# DOLFIN imports
 import logging
+import dolfin as dl
 logging.getLogger('FFC').setLevel(logging.ERROR)
 logging.getLogger('UFC').setLevel(logging.ERROR)
-import dolfin as dl
 dl.set_log_level(40)
-from forward_solve import Fin, get_space
-from muq_mod_five_param import ROM_forward, DL_ROM_forward, FOM_forward
-import matplotlib.pyplot as plt
 
 # MUQ Includes
-import sys
 sys.path.insert(0,'/home/fenics/Installations/MUQ_INSTALL/lib')
 import pymuqModeling as mm # Needed for Gaussian distribution
 import pymuqApproximation as ma # Needed for Gaussian processes
 import pymuqSamplingAlgorithms as ms # Needed for MCMC
+
+# ROMML imports
+from fom.forward_solve import Fin, get_space
+from muq_mod_five_param import ROM_forward, DL_ROM_forward, FOM_forward
 
 resolution = 40
 r_fwd = ROM_forward(resolution, out_type="subfin_avg")

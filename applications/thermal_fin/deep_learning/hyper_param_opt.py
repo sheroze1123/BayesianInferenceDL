@@ -4,8 +4,9 @@ from skopt.space import Real, Integer, Categorical
 from skopt.utils import use_named_args
 from skopt import gp_minimize
 from skopt.plots import plot_convergence
-from dl_model import load_dataset_subfin, parametric_model
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
+
+from dl_model import load_dataset_subfin, parametric_model
 
 #  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
 

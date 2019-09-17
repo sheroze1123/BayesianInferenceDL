@@ -2,12 +2,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import sys
+sys.path.append('../')
+
 import numpy as np
 import tensorflow as tf
 from dolfin import *
-from forward_solve import Fin
-from generate_fin_dataset import generate, FinInput, load_saved_dataset
-from models.simple_dnn import simple_dnn as model
+from fom.forward_solve import Fin
+from deep_learnin.generate_fin_dataset import generate, FinInput, load_saved_dataset
+from .models.simple_dnn import simple_dnn as model
 
 set_log_level(40)
 

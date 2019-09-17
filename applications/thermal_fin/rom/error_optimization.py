@@ -1,6 +1,9 @@
+import sys
+sys.path.append('../')
+
 from dolfin import *
 import numpy as np
-from forward_solve import Fin
+from fom.forward_solve import Fin
 import scipy.optimize
 #  import time
 

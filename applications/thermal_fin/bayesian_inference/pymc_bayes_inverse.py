@@ -1,11 +1,17 @@
-import pymc3 as pm
+import sys; sys.path.append('../')
 import numpy as np
+import matplotlib.pyplot as plt
 import dolfin as dl; dl.set_log_level(40)
-from forward_solve import Fin, get_space
+
+# PyMC imports
+import pymc3 as pm
 from theano.compile.ops import as_op
 import theano.tensor as tt
 import theano
-import matplotlib.pyplot as plt
+
+# ROMML imports
+from fom.forward_solve import Fin
+from fom.thermal_fin import get_space
 
 class SqError:
     def __init__(self):

@@ -1,14 +1,16 @@
+import sys
+sys.path.append('../')
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-import mshr
+
 from mshr import Rectangle, generate_mesh
 from dolfin import *
-from forward_solve import Fin
-from error_optimization import optimize
-from model_constr_adaptive_sampling import sample, enrich
-
 set_log_level(40)
+
+from fom.forward_solve import Fin
+from rom.error_optimization import optimize
+from rom.model_constr_adaptive_sampling import sample, enrich
 
 # Create a fin geometry
 geometry = Rectangle(Point(2.5, 0.0), Point(3.5, 4.0)) \

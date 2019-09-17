@@ -1,10 +1,12 @@
+import sys
+sys.path.append('../')
 import matplotlib; matplotlib.use("agg")
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-dark-palette')
 import numpy as np
-from dl_model import load_parametric_model
+from deep_learning.dl_model import load_parametric_model
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
-from forward_solve import Fin, get_space
+from fom.forward_solve import Fin, get_space
 
 model = load_parametric_model('relu', Adam, 0.004, 6, 50, 150, 600)
 z_val = np.loadtxt('data/z_avg_v.txt', delimiter=',')

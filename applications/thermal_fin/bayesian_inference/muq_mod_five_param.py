@@ -1,10 +1,10 @@
-import sys
+import sys; sys.path.append('../')
 sys.path.insert(0,'/home/fenics/Installations/MUQ_INSTALL/lib')
 import pymuqModeling as mm
 import numpy as np
-from dl_model import load_parametric_model
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
-from forward_solve import Fin, get_space
+from fom.forward_solve import Fin, get_space
+from deep_learning.dl_model import load_parametric_model
 
 class FOM_forward(mm.PyModPiece):
     """

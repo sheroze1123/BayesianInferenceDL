@@ -1,11 +1,15 @@
+import sys
+sys.path.append('../')
+
 import numpy as np
 import tensorflow as tf
-from dolfin import *
-from forward_solve import Fin
-from thermal_fin import get_space
-from averaged_affine_ROM import AffineROMFin
 from pandas import read_csv
-from gaussian_field import make_cov_chol
+from dolfin import *
+
+from fom.forward_solve import Fin
+from fom.thermal_fin import get_space
+from rom.averaged_affine_ROM import AffineROMFin
+from bayesian_inference.gaussian_field import make_cov_chol
 
 def gen_affine_avg_rom_dataset(dataset_size, resolution=40):
     V = get_space(resolution)

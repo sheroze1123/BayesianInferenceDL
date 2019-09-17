@@ -1,17 +1,26 @@
-import pymc3 as pm
+import sys
+sys.path.append('../')
+
 import numpy as np
-import dolfin as dl; dl.set_log_level(40)
-from forward_solve import Fin
-from thermal_fin import get_space
-from averaged_affine_ROM import AffineROMFin 
-from dl_model import load_parametric_model_avg
-from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
-from theano.compile.ops import as_op
-import theano.tensor as tt
-from gaussian_field import make_cov_chol
-import theano
 import time
 import matplotlib.pyplot as plt
+import dolfin as dl; dl.set_log_level(40)
+
+# Tensorflow related imports
+from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
+
+# PyMC related imports
+import pymc3 as pm
+from theano.compile.ops import as_op
+import theano.tensor as tt
+import theano
+
+# ROMML imports
+from fom.forward_solve import Fin
+from fom.thermal_fin import get_space
+from rom.averaged_affine_ROM import AffineROMFin 
+from deep_learning.dl_model import load_parametric_model_avg
+from gaussian_field import make_cov_chol
 
 class SqError:
     def __init__(self, V, chol):
@@ -19,7 +28,7 @@ class SqError:
         self._solver = Fin(self._V)
         self._solver_r = AffineROMFin(self._V)
         self._pred_k = dl.Function(self._V)
-        self.phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+        self.phi = np.loadtxt('../data/basis_five_param.txt',delimiter=",")
         self.k_true = dl.Function(self._V)
         norm = np.random.randn(len(chol))
         nodal_vals = np.exp(0.5 * chol.T @ norm)
@@ -150,5 +159,3 @@ dl.plot(k_inv)
 plt.show()
 dl.plot(sq_err_r._error_op.k_true)
 plt.show()
-
-import pdb; pdb.set_trace()

@@ -1,8 +1,10 @@
-from thermal_fin import get_space
+import sys; sys.path.append('../')
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import linalg, spatial
 from fenics import Function, plot
-import matplotlib.pyplot as plt
+
+from fom.thermal_fin import get_space
 
 def make_cov_chol(V, kern_type='m52', length=1.6):
     Wdofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))

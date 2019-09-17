@@ -1,9 +1,11 @@
-from forward_solve import Fin
-from thermal_fin import get_space
-from gaussian_field import make_cov_chol
+import sys; sys.path.append('../')
 import dolfin as dl
 import numpy as np
 import matplotlib.pyplot as plt
+
+from fom.forward_solve import Fin
+from fom.thermal_fin import get_space
+from bayesian_inference.gaussian_field import make_cov_chol
 
 # Setup solver
 V = get_space(40)

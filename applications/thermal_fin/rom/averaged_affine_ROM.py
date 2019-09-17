@@ -1,11 +1,16 @@
-from dolfin import *
+import sys
+sys.path.append('../')
+import time
 import numpy as np
-from mshr import Rectangle, generate_mesh
-from thermal_fin import get_space
 import matplotlib.pyplot as plt
+
+from dolfin import *
+from mshr import Rectangle, generate_mesh
+
 from tensorflow.keras.backend import get_session, gradients
 import tensorflow as tf
-import time
+
+from fom.thermal_fin import get_space
 
 class SubFin(SubDomain):
     def __init__(self, subfin_bdry, **kwargs):

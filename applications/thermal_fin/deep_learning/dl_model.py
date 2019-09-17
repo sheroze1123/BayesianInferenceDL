@@ -1,30 +1,33 @@
+import sys; sys.path.append('../')
 import numpy as np
 import matplotlib; matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import os
 
 from dolfin import set_log_level; set_log_level(40)
+
 from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from tensorflow.keras.layers import Dropout, Dense
-from generate_fin_dataset import generate_five_param_np, gen_affine_avg_rom_dataset
+
+from deep_learning.generate_fin_dataset import generate_five_param_np, gen_affine_avg_rom_dataset
 
 def load_dataset(load_prev=True, tr_size=4000, v_size=200):
-    if os.path.isfile('data/z_train_np.txt') and load_prev:
-        z_train = np.loadtxt('data/z_train_np.txt', delimiter=',')
-        errors_train =  np.loadtxt('data/errors_train_np.txt', delimiter=',')
+    if os.path.isfile('../data/z_train_np.txt') and load_prev:
+        z_train = np.loadtxt('../data/z_train_np.txt', delimiter=',')
+        errors_train =  np.loadtxt('../data/errors_train_np.txt', delimiter=',')
     else:
         (z_train, errors_train) = generate_five_param_np(tr_size)
-        np.savetxt('data/z_train_np.txt', z_train, delimiter=',')
-        np.savetxt('data/errors_train_np.txt', errors_train, delimiter=',')
+        np.savetxt('../data/z_train_np.txt', z_train, delimiter=',')
+        np.savetxt('../data/errors_train_np.txt', errors_train, delimiter=',')
 
-    if os.path.isfile('data/z_val_np.txt') and load_prev:
-        z_val = np.loadtxt('data/z_val_np.txt', delimiter=',')
-        errors_val =  np.loadtxt('data/errors_val_np.txt', delimiter=',')
+    if os.path.isfile('../data/z_val_np.txt') and load_prev:
+        z_val = np.loadtxt('../data/z_val_np.txt', delimiter=',')
+        errors_val =  np.loadtxt('../data/errors_val_np.txt', delimiter=',')
     else:
         (z_val, errors_val) = generate_five_param_np(v_size)
-        np.savetxt('data/z_val_np.txt', z_val, delimiter=',')
-        np.savetxt('data/errors_val_np.txt', errors_val, delimiter=',')
+        np.savetxt('../data/z_val_np.txt', z_val, delimiter=',')
+        np.savetxt('../data/errors_val_np.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -33,21 +36,21 @@ def load_dataset_subfin(load_prev=True, tr_size=4000, v_size=200):
     Load dataset where the conductivity is parametrized by 5 parameters per subfin
     and the QoI is the averaged temperature per subfin.
     '''
-    if os.path.isfile('data/z_subfin_temp_avg_train.txt') and load_prev:
-        z_train = np.loadtxt('data/z_subfin_temp_avg_train.txt', delimiter=',')
-        errors_train =  np.loadtxt('data/errors_subfin_temp_avg_train.txt', delimiter=',')
+    if os.path.isfile('../data/z_subfin_temp_avg_train.txt') and load_prev:
+        z_train = np.loadtxt('../data/z_subfin_temp_avg_train.txt', delimiter=',')
+        errors_train =  np.loadtxt('../data/errors_subfin_temp_avg_train.txt', delimiter=',')
     else:
         (z_train, errors_train) = gen_five_param_subfin_avg(tr_size)
-        np.savetxt('data/z_subfin_temp_avg_train.txt', z_train, delimiter=',')
-        np.savetxt('data/errors_subfin_temp_avg_train.txt', errors_train, delimiter=',')
+        np.savetxt('../data/z_subfin_temp_avg_train.txt', z_train, delimiter=',')
+        np.savetxt('../data/errors_subfin_temp_avg_train.txt', errors_train, delimiter=',')
 
-    if os.path.isfile('data/z_subfin_temp_avg_eval.txt') and load_prev:
-        z_val = np.loadtxt('data/z_subfin_temp_avg_eval.txt', delimiter=',')
-        errors_val =  np.loadtxt('data/errors_subfin_temp_avg_eval.txt', delimiter=',')
+    if os.path.isfile('../data/z_subfin_temp_avg_eval.txt') and load_prev:
+        z_val = np.loadtxt('../data/z_subfin_temp_avg_eval.txt', delimiter=',')
+        errors_val =  np.loadtxt('../data/errors_subfin_temp_avg_eval.txt', delimiter=',')
     else:
         (z_val, errors_val) = gen_five_param_subfin_avg(v_size)
-        np.savetxt('data/z_subfin_temp_avg_eval.txt', z_val, delimiter=',')
-        np.savetxt('data/errors_subfin_temp_avg_eval.txt', errors_val, delimiter=',')
+        np.savetxt('../data/z_subfin_temp_avg_eval.txt', z_val, delimiter=',')
+        np.savetxt('../data/errors_subfin_temp_avg_eval.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -56,21 +59,21 @@ def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
     Load dataset where the conductivity is parametrized as a FEniCS function
     and the QoI is the averaged temperature per subfin
     '''
-    if os.path.isfile('data/z_aff_avg_tr.txt') and load_prev:
-        z_train = np.loadtxt('data/z_aff_avg_tr.txt', delimiter=',')
-        errors_train =  np.loadtxt('data/errors_aff_avg_tr.txt', delimiter=',')
+    if os.path.isfile('../data/z_aff_avg_tr.txt') and load_prev:
+        z_train = np.loadtxt('../data/z_aff_avg_tr.txt', delimiter=',')
+        errors_train =  np.loadtxt('../data/errors_aff_avg_tr.txt', delimiter=',')
     else:
         (z_train, errors_train) = gen_affine_avg_rom_dataset(tr_size)
-        np.savetxt('data/z_aff_avg_tr.txt', z_train, delimiter=',')
-        np.savetxt('data/errors_aff_avg_tr.txt', errors_train, delimiter=',')
+        np.savetxt('../data/z_aff_avg_tr.txt', z_train, delimiter=',')
+        np.savetxt('../data/errors_aff_avg_tr.txt', errors_train, delimiter=',')
 
-    if os.path.isfile('data/z_aff_avg_eval.txt') and load_prev:
-        z_val = np.loadtxt('data/z_aff_avg_eval.txt', delimiter=',')
-        errors_val =  np.loadtxt('data/errors_aff_avg_eval.txt', delimiter=',')
+    if os.path.isfile('../data/z_aff_avg_eval.txt') and load_prev:
+        z_val = np.loadtxt('../data/z_aff_avg_eval.txt', delimiter=',')
+        errors_val =  np.loadtxt('../data/errors_aff_avg_eval.txt', delimiter=',')
     else:
         (z_val, errors_val) = gen_affine_avg_rom_dataset(v_size)
-        np.savetxt('data/z_aff_avg_eval.txt', z_val, delimiter=',')
-        np.savetxt('data/errors_aff_avg_eval.txt', errors_val, delimiter=',')
+        np.savetxt('../data/z_aff_avg_eval.txt', z_val, delimiter=',')
+        np.savetxt('../data/errors_aff_avg_eval.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -137,10 +140,10 @@ def parametric_model(activation,
         #  model.save_weights('data/keras_model_avg')
 
     # Save best model
-    best_vmape = np.loadtxt('data/best_vmape.txt').item()
+    best_vmape = np.loadtxt('../data/best_vmape.txt').item()
     if (vmape < best_vmape):
-        np.savetxt('data/best_vmape.txt',  np.array([vmape]))
-        model.save_weights('data/keras_model_avg_best')
+        np.savetxt('../data/best_vmape.txt',  np.array([vmape]))
+        model.save_weights('../data/keras_model_avg_best')
 
     return vmape
 
@@ -154,9 +157,9 @@ def load_parametric_model(activation,
     model.add(Dense(5))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
 
-    if os.path.isfile('data/keras_model.index'):
+    if os.path.isfile('../data/keras_model.index'):
         print ("Keras model weights loaded")
-        model.load_weights('data/keras_model')
+        model.load_weights('../data/keras_model')
     else: 
         print ("Keras model not found!")
 
@@ -174,12 +177,12 @@ def load_parametric_model_avg(activation,
     model.add(Dense(9))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
 
-    if os.path.isfile('data/keras_model_avg_best.index'):
+    if os.path.isfile('../data/keras_model_avg_best.index'):
         print ("Best Keras model weights loaded")
-        model.load_weights('data/keras_model_avg_best')
-    elif os.path.isfile('data/keras_model.index'):
+        model.load_weights('../data/keras_model_avg_best')
+    elif os.path.isfile('../data/keras_model.index'):
         print ("Keras model weight loaded")
-        modal.load_weights('data/keras_model')
+        modal.load_weights('../data/keras_model')
     else: 
         print ("Keras model not found!")
 
