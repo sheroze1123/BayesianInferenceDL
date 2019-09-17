@@ -107,7 +107,6 @@ venv.bak/
 
 scratch/outputs
 hippylib-2.1.0/
-applications/thermal_fin/data/
-applications/thermal_fin/data_rom_error
-applications/thermal_fin/data_rom_error_five_param
-applications/thermal_fin/data_rom_error_five_param_new
+data/keras_model*
+data/checkpoint
+data/best_vmape.txt
