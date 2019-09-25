@@ -2,12 +2,11 @@ import sys
 sys.path.append('../')
 
 import numpy as np
-import time
 import matplotlib.pyplot as plt
 import dolfin as dl; dl.set_log_level(40)
 
 # Tensorflow related imports
-from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
+from tensorflow.keras.optimizers import Adam
 
 # PyMC related imports
 import pymc3 as pm
@@ -23,24 +22,43 @@ from deep_learning.dl_model import load_parametric_model_avg
 from gaussian_field import make_cov_chol
 
 class SqError:
+    '''
+    Wrapper class interfacing Theano operators and ROMML
+    to compute forward solves and parameter gradients
+    '''
     def __init__(self, V, chol):
+        '''
+        Parameters:
+            V - FEniCS FunctionSpace
+            chol - Covariance matrix to define Gaussian field over V
+        '''
         self._V = V
         self._solver = Fin(self._V)
-        self._solver_r = AffineROMFin(self._V)
         self._pred_k = dl.Function(self._V)
-        self.phi = np.loadtxt('../data/basis_five_param.txt',delimiter=",")
+
+        # Setup synthetic observations
         self.k_true = dl.Function(self._V)
         norm = np.random.randn(len(chol))
         nodal_vals = np.exp(0.5 * chol.T @ norm)
         self.k_true.vector().set_local(nodal_vals)
         w, y, A, B, C = self._solver.forward(self.k_true)
         self.obs_data = self._solver.qoi_operator(w)
+
+        # Initialize reduced order model
+        self._solver_r = AffineROMFin(self._V)
+        self.phi = np.loadtxt('../data/basis_five_param.txt',delimiter=",")
         self._solver_r.set_reduced_basis(self.phi)
         self._solver_r.set_data(self.obs_data)
+
+        # Setup DL error model
         self._err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
         self._solver_r.set_dl_model(self._err_model)
 
     def err_grad_FOM(self, pred_k):
+        '''
+        For a given parameter, computes the high fidelity forward solution
+        and the gradient with respect to the cost function
+        '''
         self._pred_k.vector().set_local(pred_k)
         w, y, a, b, c = self._solver.forward(self._pred_k)
         qoi = self._solver.qoi_operator(w)
@@ -49,6 +67,10 @@ class SqError:
         return err, grad
 
     def err_grad_ROM(self, pred_k):
+        '''
+        For a given parameter, computes the reduced-order forward solution
+        and the gradient with respect to the cost function
+        '''
         self._pred_k.vector().set_local(pred_k)
         w_r = self._solver_r.forward_reduced(self._pred_k)
         qoi_r = self._solver_r.qoi_reduced(w_r)
@@ -57,6 +79,10 @@ class SqError:
         return err_r, grad_r
 
     def err_grad_ROMML(self, pred_k):
+        '''
+        For a given parameter, computes the reduced-order + ML forward solution
+        and the gradient with respect to the cost function
+        '''
         self._pred_k.vector().set_local(pred_k)
         w_r = self._solver_r.forward_reduced(self._pred_k)
         qoi_r = self._solver_r.qoi_reduced(w_r)
@@ -67,6 +93,9 @@ class SqError:
         return err_t, grad_t
 
 class SqErrorOpROM(theano.Op):
+    '''
+    Theano operator to setup misfit functional with ROM
+    '''
     itypes = [tt.dvector]
     otypes = [tt.dscalar, tt.dvector]
     __props__ = ()
@@ -85,6 +114,9 @@ class SqErrorOpROM(theano.Op):
         return [output_gradients[0] * grad] 
 
 class SqErrorOpFOM(theano.Op):
+    '''
+    Theano operator to setup misfit functional with FOM
+    '''
     itypes = [tt.dvector]
     otypes = [tt.dscalar, tt.dvector]
     __props__ = ()
@@ -103,6 +135,9 @@ class SqErrorOpFOM(theano.Op):
         return [output_gradients[0] * grad] 
 
 class SqErrorOpROMML(theano.Op):
+    '''
+    Theano operator to setup misfit functional with ROM + ML
+    '''
     itypes = [tt.dvector]
     otypes = [tt.dscalar, tt.dvector]
     __props__ = ()
@@ -127,12 +162,14 @@ sq_err = SqErrorOpFOM(V, chol)
 sq_err_r = SqErrorOpROM(V, chol)
 sq_err_romml = SqErrorOpROMML(V, chol)
 
+# Start chain with random Gaussian field parameter
 norm = np.random.randn(len(chol))
 nodal_vals_start = np.exp(0.5 * chol.T @ norm)
 
 Wdofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))
 V0_dofs = V.dofmap().dofs()
 points = Wdofs_x[V0_dofs, :] 
+num_pts = len(points)
 sigma = 1e-3
 
 with pm.Model() as misfit_model:
@@ -142,15 +179,13 @@ with pm.Model() as misfit_model:
     cov = pm.gp.cov.Matern52(2, ls=ls)
     nodal_vals = pm.gp.Latent(cov_func=cov).prior('nodal_vals', X=points)
 
-    #  noise_var = 1e-4
-    #  noise_cov = noise_var * np.eye(obs_data.size)
-    #  avg_temp = fwd_model(nodal_vals)
-    #  likelihood = pm.MvNormal('likelihood', mu=avg_temp, cov=noise_cov, observed=obs_data)
-    #  step_method = pm.step_methods.metropolis.Metropolis()
-    #  trace = pm.sample(1000,step=step_method, cores=1)
+    # TODO: Missing constant term here?
+    y = pm.Potential('y', sq_err_romml(nodal_vals)[0] / sigma / sigma
+            + num_pts * tt.log(sigma))
+    trace = pm.sample(1000, cores=4, tune=200)
 
-    y = pm.Potential('y', -0.5 * sq_err_romml(nodal_vals)[0] / sigma / sigma)
-    trace = pm.sample(200, cores=1, tune=200)
+pm.plot_posterior(trace)
+plt.show()
 
 pm.traceplot(trace)
 k_inv = dl.Function(V)

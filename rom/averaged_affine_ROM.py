@@ -355,6 +355,4 @@ class AffineROMFin:
             fin8_avg[:],
             fin9_avg[:]))
 
-        np.savetxt('B_obs.txt', B, delimiter=",")
-
         return B

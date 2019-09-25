@@ -10,49 +10,7 @@ from tensorflow.keras import layers, Sequential
 from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
 from tensorflow.keras.layers import Dropout, Dense
 
-from deep_learning.generate_fin_dataset import generate_five_param_np, gen_affine_avg_rom_dataset
-
-def load_dataset(load_prev=True, tr_size=4000, v_size=200):
-    if os.path.isfile('../data/z_train_np.txt') and load_prev:
-        z_train = np.loadtxt('../data/z_train_np.txt', delimiter=',')
-        errors_train =  np.loadtxt('../data/errors_train_np.txt', delimiter=',')
-    else:
-        (z_train, errors_train) = generate_five_param_np(tr_size)
-        np.savetxt('../data/z_train_np.txt', z_train, delimiter=',')
-        np.savetxt('../data/errors_train_np.txt', errors_train, delimiter=',')
-
-    if os.path.isfile('../data/z_val_np.txt') and load_prev:
-        z_val = np.loadtxt('../data/z_val_np.txt', delimiter=',')
-        errors_val =  np.loadtxt('../data/errors_val_np.txt', delimiter=',')
-    else:
-        (z_val, errors_val) = generate_five_param_np(v_size)
-        np.savetxt('../data/z_val_np.txt', z_val, delimiter=',')
-        np.savetxt('../data/errors_val_np.txt', errors_val, delimiter=',')
-
-    return z_train, errors_train, z_val, errors_val
-
-def load_dataset_subfin(load_prev=True, tr_size=4000, v_size=200):
-    '''
-    Load dataset where the conductivity is parametrized by 5 parameters per subfin
-    and the QoI is the averaged temperature per subfin.
-    '''
-    if os.path.isfile('../data/z_subfin_temp_avg_train.txt') and load_prev:
-        z_train = np.loadtxt('../data/z_subfin_temp_avg_train.txt', delimiter=',')
-        errors_train =  np.loadtxt('../data/errors_subfin_temp_avg_train.txt', delimiter=',')
-    else:
-        (z_train, errors_train) = gen_five_param_subfin_avg(tr_size)
-        np.savetxt('../data/z_subfin_temp_avg_train.txt', z_train, delimiter=',')
-        np.savetxt('../data/errors_subfin_temp_avg_train.txt', errors_train, delimiter=',')
-
-    if os.path.isfile('../data/z_subfin_temp_avg_eval.txt') and load_prev:
-        z_val = np.loadtxt('../data/z_subfin_temp_avg_eval.txt', delimiter=',')
-        errors_val =  np.loadtxt('../data/errors_subfin_temp_avg_eval.txt', delimiter=',')
-    else:
-        (z_val, errors_val) = gen_five_param_subfin_avg(v_size)
-        np.savetxt('../data/z_subfin_temp_avg_eval.txt', z_val, delimiter=',')
-        np.savetxt('../data/errors_subfin_temp_avg_eval.txt', errors_val, delimiter=',')
-
-    return z_train, errors_train, z_val, errors_val
+from deep_learning.generate_fin_dataset import gen_affine_avg_rom_dataset
 
 def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
     '''
@@ -147,24 +105,6 @@ def parametric_model(activation,
 
     return vmape
 
-def load_parametric_model(activation, 
-        optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs):
-
-    model = Sequential()
-    model.add(Dense(10, input_shape=(5,)))
-    for i in range(n_hidden_layers):
-        model.add(Dense(n_weights, activation=activation))
-    model.add(Dense(5))
-    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
-
-    if os.path.isfile('../data/keras_model.index'):
-        print ("Keras model weights loaded")
-        model.load_weights('../data/keras_model')
-    else: 
-        print ("Keras model not found!")
-
-    return model
-
 def load_parametric_model_avg(activation,
         optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs, input_shape):
 
@@ -191,8 +131,7 @@ def load_parametric_model_avg(activation,
 #  vmape = parametric_model('elu', Adam, 0.0003, 5, 58, 200, 2000)
 #  print ('\nError: {:2.3f}%'.format(vmape))
 
-#  z_train, errors_train = gen_avg_rom_dataset(4000)
-#  z_val, errors_val = gen_avg_rom_dataset(200)
+#  z_train, errors_trainm, z_val, errors_val = gen_avg_rom_dataset()
 #  vmape = parametric_model('relu', Adam, 0.001128, 4, 66, 94, 400, 
         #  z_train, errors_train, z_val, errors_val)
 
@@ -205,3 +144,11 @@ def load_parametric_model_avg(activation,
 #  vmape = parametric_model('elu', Adam, 0.001, 4, 50, 10, 400, 
         #  z_train, errors_train, z_val, errors_val)
 #  print ('\nError: {:2.3f}%'.format(vmape))
+
+#  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
+#  model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, 1446)
+#  err_predict = model.predict(z_val)
+#  pred_err = np.linalg.norm(err_predict - errors_val)
+#  pred_rel_err = np.linalg.norm(err_predict - errors_val) / np.linalg.norm(errors_val)
+#  print(pred_err)
+#  print(pred_rel_err) # best being 0.016
