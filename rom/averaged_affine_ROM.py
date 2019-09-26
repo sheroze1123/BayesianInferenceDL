@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from dolfin import *
 from mshr import Rectangle, generate_mesh
+from petsc4py import PETSc
 
 from tensorflow.keras.backend import get_session, gradients
 import tensorflow as tf
@@ -51,7 +52,7 @@ class AffineROMFin:
     A class the implements the heat conduction problem for a thermal fin
     '''
 
-    def __init__(self, V):
+    def __init__(self, V, err_model, phi):
         '''
         Initializes a thermal fin instance for a given function space
 
@@ -59,7 +60,15 @@ class AffineROMFin:
             V - dolfin FunctionSpace
         '''
 
-        self.phi = None
+        self.num_params = 9
+
+        self.phi = phi
+        (n,n_r) = self.phi.shape
+        self.n_r = n_r
+
+        self.phi_p = PETSc.Mat().createDense([n,n_r], array=phi)
+        self.phi_p.assemblyBegin()
+        self.phi_p.assemblyEnd()
 
         self.V = V
         self.dofs = len(V.dofmap().dofs()) 
@@ -138,7 +147,7 @@ class AffineROMFin:
         self._k = Function(V)
 
         # Dummy init for averaged subfin values
-        self.averaged_k_s = [Constant(1.0) for i in range(9)]
+        self.averaged_k_s = [Constant(1.0) for i in range(self.num_params)]
 
         self._F = self.averaged_k_s[0] * inner(grad(self.w), grad(self.v)) \
                                                             * self.dx(1) + \
@@ -152,6 +161,18 @@ class AffineROMFin:
         self.A = PETScMatrix()
         self.B = assemble(self._a)[:]
 
+
+        # Reduced variables (PETSc)
+        self._w_r = PETSc.Vec().createSeq(self.n_r)
+        self._A_r = PETSc.Mat()
+        self._B_r = PETSc.Vec().createSeq(self.n_r)
+        self._C_r = PETSc.Vec().createSeq(self.n_r)
+        self.B_p = as_backend_type(assemble(self._a))
+        self.ksp = PETSc.KSP().create()
+        self.ksp.setType('cg')
+        self.psi_p = PETSc.Mat()
+        self.Aphi = PETSc.Mat()
+
         self._adj_F = self.averaged_k_s[0] * inner(grad(self.w_hat), grad(self.v_trial)) \
                                                                     * self.dx(1) + \
                         self.Bi * self.w_hat * self.v_trial * self.ds(1)
@@ -161,9 +182,9 @@ class AffineROMFin:
                        self.Bi *  self.w_hat * self.v_trial * self.ds(i+1)
         self.A_adj = PETScMatrix()
 
-        self.phi = None
         self.psi = None
         self.data = None
+        self.data_ph = tf.placeholder(tf.float32, shape=(9,))
         self.B_obs = self.observation_operator()
 
         self.dA_dsigmak = []
@@ -171,7 +192,19 @@ class AffineROMFin:
             self.dA_dsigmak.append(
                     assemble(inner(grad(self.w), grad(self.v))  * self.dx(i+1)).array())
 
-        self.dl_model = None
+        self.dl_model = err_model
+
+        # Placeholders and precomputed values required for setting up gradients
+        self.reduced_fwd_obs = tf.placeholder(tf.float32, shape=(9,))
+        self.loss = tf.divide(tf.reduce_sum(tf.square(
+            self.data_ph - self.reduced_fwd_obs - self.dl_model.layers[-1].output)), 2)
+        self.NN_grad = gradients(self.loss, self.dl_model.input)
+
+        self.dL_dsigmak = np.zeros(self.num_params)
+        self.dA_dsigmak_phi = np.zeros((self.num_params, self.dofs, self.phi.shape[1]))
+        for i in range(self.num_params):
+            self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
+        self.B_obs_phi = np.dot(self.B_obs, self.phi)
 
     def forward(self, k):
         '''
@@ -209,23 +242,30 @@ class AffineROMFin:
             w : numpy array     - reduced solution
         '''
 
-        #  t_i = time.time()
-
         k_s = self.subfin_avg_op(k)
 
         for i in range(len(k_s)):
             self.averaged_k_s[i].assign(k_s[i])
 
         assemble(self._F, tensor=self.A)
-        A = self.A.array()
-        psi = np.dot(A, self.phi)
-        A_r = np.dot(psi.T, np.dot(A, self.phi))
-        B_r = np.dot(psi.T, self.B)
+        #  A = self.A.array()
+        #  self.psi = np.dot(A, self.phi)
+        #  A_r = np.dot(self.psi.T, np.dot(A, self.phi))
+        #  B_r = np.dot(self.psi.T, self.B)
         
-        w_r = np.linalg.solve(A_r, B_r)
+        #  w_r = np.linalg.solve(A_r, B_r)
 
-        #  t_f = time.time()
-        #  print("Reduced forward time taken: {}\n".format(t_f - t_i))
+#####################
+## PETSc version
+####################
+
+        self.A.mat().matMult(self.phi_p, self.psi_p)
+        self.A.mat().matMult(self.phi_p, self.Aphi)
+        self.psi_p.transposeMatMult(self.Aphi, self._A_r)
+        self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
+        self.ksp.setOperators(self._A_r)
+        self.ksp.solve(self._B_r, self._w_r)
+        w_r = self._w_r[:]
 
         return w_r
 
@@ -268,7 +308,6 @@ class AffineROMFin:
         psi = np.dot(self.A.array(), self.phi) 
         v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
 
-        dL_dsigmak = np.zeros(len(self.averaged_k_s))
         for i in range(len(self.averaged_k_s)):
             dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), 
                 self.phi), w_r))
@@ -277,29 +316,34 @@ class AffineROMFin:
 
     def grad_romml(self, k):
         w_r = self.forward_reduced(k)
+        e_NN = self.dl_model.predict([[k.vector()[:]]])[0]
 
         reduced_fwd_obs = np.dot(self.B_obs, np.dot(self.phi, w_r))
-        romml_fwd_obs = reduced_fwd_obs + self.dl_model.predict([[k.vector()[:]]])[0]
+        romml_fwd_obs = reduced_fwd_obs + e_NN
 
-        reduced_adj_rhs = - np.dot(np.dot(self.B_obs, self.phi).T, romml_fwd_obs - self.data)
-
-        psi = np.dot(self.A.array(), self.phi) 
+        reduced_adj_rhs = - np.dot(self.B_obs_phi.T, self.data - romml_fwd_obs)
+        psi = self.psi_p.getDenseArray()
         v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
+        #  v_r = np.linalg.solve(np.dot(self.psi.T, self.psi), reduced_adj_rhs)
 
-        dL_dsigmak = np.zeros(len(self.averaged_k_s))
-        for i in range(len(self.averaged_k_s)):
-            dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), self.phi), w_r))
+        for i in range(self.num_params):
+            self.dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(psi.T, self.dA_dsigmak_phi[i]), w_r))
+        f_x_dp_x = np.dot(self.B_obs.T, self.dL_dsigmak)
 
-        f_x_dp_x = np.dot(self.B_obs.T, dL_dsigmak)
-
-        loss = tf.divide(tf.reduce_sum(tf.square(
-            self.data - reduced_fwd_obs - self.dl_model.layers[-1].output)), 2)
-        session = get_session()
         x_inp = [k.vector()[:]]
-        f_eps_dp_eps = session.run(gradients(loss, self.dl_model.input), 
-                feed_dict={self.dl_model.input: x_inp})[0]
+        session = get_session()
+        f_eps_dp_eps = session.run(self.NN_grad, 
+                feed_dict={self.dl_model.input: x_inp,
+                           self.reduced_fwd_obs: reduced_fwd_obs,
+                           self.data_ph: self.data})[0]
 
-        return f_x_dp_x + f_eps_dp_eps.reshape(f_eps_dp_eps.size)
+        loss = session.run(self.loss,
+                feed_dict={self.dl_model.input: x_inp,
+                           self.reduced_fwd_obs: reduced_fwd_obs,
+                           self.data_ph: self.data})
+
+        grad =  f_x_dp_x + f_eps_dp_eps.reshape(f_eps_dp_eps.size)
+        return grad, loss
 
     def set_reduced_basis(self, phi):
         '''

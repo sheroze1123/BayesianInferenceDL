@@ -1,6 +1,7 @@
 import sys
 sys.path.append('../')
 
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dl; dl.set_log_level(40)
@@ -44,15 +45,16 @@ class SqError:
         w, y, A, B, C = self._solver.forward(self.k_true)
         self.obs_data = self._solver.qoi_operator(w)
 
-        # Initialize reduced order model
-        self._solver_r = AffineROMFin(self._V)
-        self.phi = np.loadtxt('../data/basis_five_param.txt',delimiter=",")
-        self._solver_r.set_reduced_basis(self.phi)
-        self._solver_r.set_data(self.obs_data)
-
         # Setup DL error model
         self._err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
-        self._solver_r.set_dl_model(self._err_model)
+        #self._solver_r.set_dl_model(self._err_model)
+
+        # Initialize reduced order model
+        self.phi = np.loadtxt('../data/basis_five_param.txt',delimiter=",")
+        self._solver_r = AffineROMFin(self._V, self._err_model, self.phi)
+        #  self._solver_r.set_reduced_basis(self.phi)
+        self._solver_r.set_data(self.obs_data)
+
 
     def err_grad_FOM(self, pred_k):
         '''
@@ -84,12 +86,12 @@ class SqError:
         and the gradient with respect to the cost function
         '''
         self._pred_k.vector().set_local(pred_k)
-        w_r = self._solver_r.forward_reduced(self._pred_k)
-        qoi_r = self._solver_r.qoi_reduced(w_r)
-        err_NN = self._err_model.predict([[pred_k]])[0]
-        qoi_t = qoi_r + err_NN
-        err_t = np.square(qoi_t - self.obs_data).sum()/2.0
-        grad_t = self._solver_r.grad_romml(self._pred_k)
+        #  w_r = self._solver_r.forward_reduced(self._pred_k)
+        #  qoi_r = self._solver_r.qoi_reduced(w_r)
+        #  err_NN = self._err_model.predict([[pred_k]])[0]
+        #  qoi_t = qoi_r + err_NN
+        #  err_t = np.square(qoi_t - self.obs_data).sum()/2.0
+        grad_t, err_t = self._solver_r.grad_romml(self._pred_k)
         return err_t, grad_t
 
 class SqErrorOpROM(theano.Op):
@@ -162,6 +164,11 @@ sq_err = SqErrorOpFOM(V, chol)
 sq_err_r = SqErrorOpROM(V, chol)
 sq_err_romml = SqErrorOpROMML(V, chol)
 
+norm = np.random.randn(len(chol))
+nodal_vals = np.exp(0.5 * chol.T @ norm)
+
+sq_err_romml._error_op.err_grad_ROMML(nodal_vals)
+
 # Start chain with random Gaussian field parameter
 norm = np.random.randn(len(chol))
 nodal_vals_start = np.exp(0.5 * chol.T @ norm)
@@ -182,7 +189,7 @@ with pm.Model() as misfit_model:
     # TODO: Missing constant term here?
     y = pm.Potential('y', sq_err_romml(nodal_vals)[0] / sigma / sigma
             + num_pts * tt.log(sigma))
-    trace = pm.sample(1000, cores=4, tune=200)
+    trace = pm.sample(1000, cores=1, tune=200)
 
 pm.plot_posterior(trace)
 plt.show()
