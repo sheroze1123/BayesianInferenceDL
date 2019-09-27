@@ -1,6 +1,7 @@
 import sys
 sys.path.append('../')
 
+import matplotlib; matplotlib.use('macosx')
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -189,15 +190,15 @@ with pm.Model() as misfit_model:
     # TODO: Missing constant term here?
     y = pm.Potential('y', sq_err_romml(nodal_vals)[0] / sigma / sigma
             + num_pts * tt.log(sigma))
-    trace = pm.sample(1000, cores=1, tune=200)
+    trace = pm.sample(1000, tune=500)
 
-pm.plot_posterior(trace)
-plt.show()
+#  pm.plot_posterior(trace)
+#  plt.show()
+#  pm.traceplot(trace)
 
-pm.traceplot(trace)
 k_inv = dl.Function(V)
 k_inv.vector().set_local(np.mean(trace['nodal_vals'],0))
 dl.plot(k_inv)
-plt.show()
+plt.savefig("k_inv.png")
 dl.plot(sq_err_r._error_op.k_true)
-plt.show()
+plt.savefig("k_true.png")
