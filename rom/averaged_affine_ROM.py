@@ -9,6 +9,7 @@ from mshr import Rectangle, generate_mesh
 from petsc4py import PETSc
 
 from tensorflow.keras.backend import get_session, gradients
+#  from tensorflow.keras.backend import gradients
 import tensorflow as tf
 
 from fom.thermal_fin import get_space
@@ -205,6 +206,12 @@ class AffineROMFin:
         for i in range(self.num_params):
             self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
         self.B_obs_phi = np.dot(self.B_obs, self.phi)
+
+    #  @tf.function
+    #  def cost_function(self, x_inp, data, y_ROM):
+        #  y_NN = self.dl_model.predict([x_inp])[0]
+        #  return tf.divide(tf.reduce_sum(tf.square(data - y_ROM - y_NN)), 2)
+
 
     def forward(self, k):
         '''
