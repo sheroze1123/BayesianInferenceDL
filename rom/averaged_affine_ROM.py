@@ -206,6 +206,7 @@ class AffineROMFin:
         for i in range(self.num_params):
             self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
         self.B_obs_phi = np.dot(self.B_obs, self.phi)
+        import pdb; pdb.set_trace()
 
     #  @tf.function
     #  def cost_function(self, x_inp, data, y_ROM):

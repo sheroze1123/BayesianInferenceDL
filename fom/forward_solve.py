@@ -63,27 +63,27 @@ class SubfinValExpr(UserExpression):
         self.k1, self.k2, self.k3, self.k4, self.k5, self.k6, self.k7, self.k8, self.k9 = k_s
         super(SubfinValExpr, self).__init__(**kwargs)
     def eval(self, value, x):
-        if (x[0] >= 2.5) and (x[0] <= 3.5):
+        if between(x[0], (2.5, 3.5)):
             value[0] = self.k5
-        elif (x[0] < 2.5):
-            if (x[1] >= 0.75) and (x[1] <= 1.0):
+        elif (x[0] <= 2.5):
+            if between(x[1], (0.75, 1.0)):
                 value[0] = self.k1
-            elif (x[1] >= 1.75) and (x[1] <= 2.0):
+            elif between(x[1], (1.75, 2.0)):
                 value[0] = self.k2
-            elif (x[1] >= 2.75) and (x[1] <= 3.0):
+            elif between(x[1], (2.75, 3.0)):
                 value[0] = self.k3
-            elif (x[1] >= 3.75) and (x[1] <= 4.0):
+            elif between(x[1], (3.75, 4.0)):
                 value[0] = self.k4
             else:
                 value[0] = 0.0
         else:
-            if (x[1] >= 0.75) and (x[1] <= 1.0):
+            if between(x[1], (0.75, 1.0)):
                 value[0] = self.k9
-            elif (x[1] >= 1.75) and (x[1] <= 2.0):
+            elif between(x[1], (1.75, 2.0)):
                 value[0] = self.k8
-            elif (x[1] >= 2.75) and (x[1] <= 3.0):
+            elif between(x[1], (2.75, 3.0)):
                 value[0] = self.k7
-            elif (x[1] >= 3.75) and (x[1] <= 4.0):
+            elif between(x[1], (3.75, 4.0)):
                 value[0] = self.k6
             else:
                 value[0] = 0.0
@@ -168,6 +168,20 @@ class Fin:
                 self.Bi * self.w_hat * self.v_trial * self.ds(1)
         self.A_adj = PETScMatrix()
 
+        self.gamma = Constant(0.00001)
+
+        # Tikhonov Regularization
+        #  self.grad_reg = self.gamma * inner(grad(self._k), grad(self.w_hat)) * self.dx(0)
+        #  self.reg = 0.5 * self.gamma * inner(grad(self._k), grad(self._k)) * self.dx(0)
+
+        # Total Variation Regularization
+        def TV(u, eps=Constant(1e-5)):
+            return sqrt( inner(grad(u), grad(u)) + eps)
+            
+        self.reg = 0.5 * self.gamma * TV(self._k) * self.dx(0)
+        self.grad_reg = self.gamma / TV(self._k) \
+                * inner(grad(self._k), grad(self.w_hat))* self.dx(0)
+
         self.fin1_A = assemble(Constant(1.0) * self.dx_s(1))
         self.fin2_A = assemble(Constant(1.0) * self.dx_s(2))
         self.fin3_A = assemble(Constant(1.0) * self.dx_s(3))
@@ -212,6 +226,7 @@ class Fin:
     def gradient(self, k, data):
 
         if (np.allclose((np.linalg.norm(k.vector()[:])), 0.0)):
+            print("parameter vector norm close to zero!")
             return 100 * np.ones(k.vector()[:].shape)
 
         z = Function(self.V)
@@ -220,7 +235,7 @@ class Fin:
         solve(self._F == self._a, z) 
         pred_obs = np.dot(self.B_obs, z.vector()[:])
 
-        adj_RHS = -np.dot(self.B_obs.T, pred_obs - data)
+        adj_RHS = -np.dot((pred_obs - data).T, self.B_obs)
         assemble(self._adj_F, tensor=self.A_adj)
         v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
 
