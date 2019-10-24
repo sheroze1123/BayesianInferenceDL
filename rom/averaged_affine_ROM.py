@@ -64,10 +64,9 @@ class AffineROMFin:
         self.num_params = 9
 
         self.phi = phi
-        (n,n_r) = self.phi.shape
-        self.n_r = n_r
+        (self.n,self.n_r) = self.phi.shape
 
-        self.phi_p = PETSc.Mat().createDense([n,n_r], array=phi)
+        self.phi_p = PETSc.Mat().createDense([self.n,self.n_r], array=phi)
         self.phi_p.assemblyBegin()
         self.phi_p.assemblyEnd()
 
@@ -145,8 +144,6 @@ class AffineROMFin:
         self.fin8_A = assemble(Constant(1.0) * self.dx(8))
         self.fin9_A = assemble(Constant(1.0) * self.dx(9))
 
-        self._k = Function(V)
-
         # Dummy init for averaged subfin values
         self.averaged_k_s = [Constant(1.0) for i in range(self.num_params)]
 
@@ -188,10 +185,20 @@ class AffineROMFin:
         self.data_ph = tf.placeholder(tf.float32, shape=(9,))
         self.B_obs = self.observation_operator()
 
-        self.dA_dsigmak = []
-        for i in range(len(self.averaged_k_s)):
-            self.dA_dsigmak.append(
-                    assemble(inner(grad(self.w), grad(self.v))  * self.dx(i+1)).array())
+        self.dA_dsigmak = np.zeros((self.num_params, self.n, self.n))
+        self.dA_dsigmak_phi = np.zeros((self.num_params, self.n, self.n_r))
+        for i in range(self.num_params):
+            A_i = assemble(inner(grad(self.w), grad(self.v))  * self.dx(i+1)).array()
+            self.dA_dsigmak[i, :, :] = A_i
+            self.dA_dsigmak_phi[i, :, :] = np.dot(A_i, self.phi)
+
+        self.dA_dk_phi = np.zeros((self.n, self.n, self.n_r))
+        self.B_obs_phi = np.dot(self.B_obs, self.phi)
+        for i in range(self.num_params):
+            dAi_dsigmak = np.zeros((self.n, self.n, self.num_params))
+            dAi_dsigmak[:,:,i] = self.dA_dsigmak[i, :, :]
+            dAi_dk_phi = np.dot(dAi_dsigmak, self.B_obs_phi)
+            self.dA_dk_phi = self.dA_dk_phi + dAi_dk_phi
 
         self.dl_model = err_model
 
@@ -202,11 +209,12 @@ class AffineROMFin:
         self.NN_grad = gradients(self.loss, self.dl_model.input)
 
         self.dL_dsigmak = np.zeros(self.num_params)
+
+
         self.dA_dsigmak_phi = np.zeros((self.num_params, self.dofs, self.phi.shape[1]))
         for i in range(self.num_params):
             self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
-        self.B_obs_phi = np.dot(self.B_obs, self.phi)
-        import pdb; pdb.set_trace()
+
 
     #  @tf.function
     #  def cost_function(self, x_inp, data, y_ROM):
@@ -277,66 +285,95 @@ class AffineROMFin:
 
         return w_r
 
+    def forward_nine_param(self, k_s):
+        '''
+        Given average thermal conductivity values of each subfin,
+        returns the reduced forward solve
+        '''
+        for i in range(len(k_s)):
+            self.averaged_k_s[i].assign(k_s[i])
+
+        assemble(self._F, tensor=self.A)
+        self.A.mat().matMult(self.phi_p, self.psi_p)
+        self.A.mat().matMult(self.phi_p, self.Aphi)
+        self.psi_p.transposeMatMult(self.Aphi, self._A_r)
+        self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
+        self.ksp.setOperators(self._A_r)
+        self.ksp.solve(self._B_r, self._w_r)
+        w_r = self._w_r[:]
+
+        return w_r
+
     def qoi(self, w):
         return self.subfin_avg_op(w) 
 
     def qoi_reduced(self, w_r):
-        w = Function(self.V)
-        w.vector().set_local(np.dot(self.phi, w_r))
-        return self.subfin_avg_op(w)
+        #  w = Function(self.V)
+        #  w.vector().set_local(np.dot(self.phi, w_r))
+        #  return self.subfin_avg_op(w)
+        return np.dot(self.B_obs_phi, w_r)
 
-    def grad(self, k):
-        k_s = self.subfin_avg_op(k)
-        for i in range(len(k_s)):
-            self.averaged_k_s[i].assign(k_s[i])
+    #  def grad(self, k):
+        #  k_s = self.subfin_avg_op(k)
+        #  for i in range(len(k_s)):
+            #  self.averaged_k_s[i].assign(k_s[i])
 
-        z = Function(self.V)
-        solve(self._F == self._a, z) 
-        pred_obs = self.qoi(z)
+        #  z = Function(self.V)
+        #  solve(self._F == self._a, z) 
+        #  pred_obs = self.qoi(z)
 
-        v = Function(self.V)
-        adj_RHS = -np.dot(self.B_obs.T, pred_obs - self.data)
-        assemble(self._adj_F, tensor=self.A_adj)
-        v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
-        v.vector().set_local(v_nodal_vals)
+        #  v = Function(self.V)
+        #  adj_RHS = -np.dot(self.B_obs.T, pred_obs - self.data)
+        #  assemble(self._adj_F, tensor=self.A_adj)
+        #  v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
+        #  v.vector().set_local(v_nodal_vals)
 
-        dL_dsigmak = np.zeros(len(self.averaged_k_s))
-        for i in range(len(dL_dsigmak)):
-            dL_dsigmak[i] = assemble(inner(grad(z), grad(v)) * self.dx(i+1))
+        #  dL_dsigmak = np.zeros(len(self.averaged_k_s))
+        #  for i in range(len(dL_dsigmak)):
+            #  dL_dsigmak[i] = assemble(inner(grad(z), grad(v)) * self.dx(i+1))
 
-        return np.dot(self.B_obs.T, dL_dsigmak)
+        #  return np.dot(self.B_obs.T, dL_dsigmak)
 
     def grad_reduced(self, k):
         w_r = self.forward_reduced(k)
+        reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
 
-        reduced_fwd_obs = np.dot(self.B_obs, np.dot(self.phi, w_r))
+        #  reduced_adj_rhs = - np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
+        reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
 
-        reduced_adj_rhs = - np.dot(np.dot(self.B_obs, self.phi).T, reduced_fwd_obs - self.data)
+        psi = self.psi_p.getDenseArray()
+        A_r = self._A_r.getDenseArray()
+        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
 
-        psi = np.dot(self.A.array(), self.phi) 
-        v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
+        psi_v_r = np.dot(psi, v_r)
 
-        for i in range(len(self.averaged_k_s)):
-            dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(np.dot(psi.T, self.dA_dsigmak[i]), 
-                self.phi), w_r))
+        A_phi_w_r = np.dot(self.dA_dsigmak_phi, w_r).T
+        dROM_dk = np.dot(A_phi_w_r, self.B_obs)
+        dJ_dk = np.dot(psi_v_r.T, dROM_dk)
 
-        return np.dot(self.B_obs.T, dL_dsigmak)
+        J = 0.5 * np.linalg.norm(self.data - reduced_fwd_obs)**2
+
+        return dJ_dk, J
 
     def grad_romml(self, k):
         w_r = self.forward_reduced(k)
         e_NN = self.dl_model.predict([[k.vector()[:]]])[0]
 
-        reduced_fwd_obs = np.dot(self.B_obs, np.dot(self.phi, w_r))
+        reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
         romml_fwd_obs = reduced_fwd_obs + e_NN
 
-        reduced_adj_rhs = - np.dot(self.B_obs_phi.T, self.data - romml_fwd_obs)
-        psi = self.psi_p.getDenseArray()
-        v_r = np.linalg.solve(np.dot(psi.T, psi), reduced_adj_rhs)
-        #  v_r = np.linalg.solve(np.dot(self.psi.T, self.psi), reduced_adj_rhs)
+        reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - romml_fwd_obs)
 
-        for i in range(self.num_params):
-            self.dL_dsigmak[i] = np.dot(v_r.T, np.dot(np.dot(psi.T, self.dA_dsigmak_phi[i]), w_r))
-        f_x_dp_x = np.dot(self.B_obs.T, self.dL_dsigmak)
+        psi = self.psi_p.getDenseArray()
+
+        A_r = self._A_r.getDenseArray()
+        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
+
+        psi_v_r = np.dot(psi, v_r)
+
+        A_phi_w_r = np.dot(self.dA_dsigmak_phi, w_r).T
+        dROM_dk = np.dot(A_phi_w_r, self.B_obs)
+        f_x_dp_x = np.dot(psi_v_r.T, dROM_dk)
 
         x_inp = [k.vector()[:]]
         session = get_session()

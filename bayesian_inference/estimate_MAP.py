@@ -83,22 +83,26 @@ class RSolverWrapper:
         self.solver_r = solver_r
         self.z = dl.Function(V)
         self.solver = solver
+        self.data = self.solver_r.data
+        self.cost = None
+        self.grad = None
 
     def cost_function(self, z_v):
         self.z.vector().set_local(z_v)
-        self.grad, self.cost = self.solver_r.grad_romml(self.z)
-        cost  = self.cost + dl.assemble(self.solver.reg)
-        return cost
+        w_r = self.solver_r.forward_reduced(self.z)
+        y_r = self.solver_r.qoi_reduced(w_r)
+        e_NN = self.err_model.predict([[z_v]])[0]
+        self.solver._k.assign(self.z)
+        y_romml = y_r + e_NN
+        self.cost = 0.5 * np.linalg.norm(y_romml - self.data)**2 + dl.assemble(self.solver.reg)
+        return self.cost
 
     def gradient(self, z_v):
         self.z.vector().set_local(z_v)
+        self.solver._k.assign(self.z)
         self.grad, self.cost = self.solver_r.grad_romml(self.z)
         grad = self.grad + dl.assemble(self.solver.grad_reg)
         return grad
-
-    def grad_reg_eval(self, z_v):
-        self.z.vector().set_local(z_v)
-        return dl.assemble(self.grad_reg)[:]
 
 solver_w = RSolverWrapper(err_model, solver_r, solver)
 #  solver_w = SolverWrapper(solver, obs_data)

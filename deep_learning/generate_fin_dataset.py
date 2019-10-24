@@ -10,14 +10,33 @@ from fom.forward_solve import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin
 from bayesian_inference.gaussian_field import make_cov_chol
+from tensorflow.keras import layers, Sequential
+from tensorflow.keras.layers import Dropout, Dense
+
+# Tensorflow related imports
+from tensorflow.keras.optimizers import Adam
+
+def load_parametric_model_avg(activation,
+        optimizer, lr, n_hidden_layers, n_weights, batch_size, n_epochs, input_shape):
+
+    model = Sequential()
+    for i in range(n_hidden_layers):
+        if i==0:
+            model.add(Dense(n_weights, activation=activation, input_shape=(input_shape,)))
+        else:
+            model.add(Dense(n_weights, activation=activation))
+    model.add(Dense(9))
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+    return model
 
 def gen_affine_avg_rom_dataset(dataset_size, resolution=40):
     V = get_space(resolution)
     chol = make_cov_chol(V, length=1.6)
     z = Function(V)
     solver = Fin(V)
-    solver_r = AffineROMFin(V)
-    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    phi = np.loadtxt('../data/basis_nine_param.txt',delimiter=",")
+    err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
+    solver_r = AffineROMFin(V, err_model, phi)
     solver_r.set_reduced_basis(phi)
     qoi_errors = np.zeros((dataset_size, 9))
 
@@ -25,6 +44,7 @@ def gen_affine_avg_rom_dataset(dataset_size, resolution=40):
     z_s = np.zeros((dataset_size, V.dim()))
 
     for i in range(dataset_size):
+        print(i)
         norm = np.random.randn(len(chol))
         nodal_vals = np.exp(0.5 * chol.T @ norm)
         z.vector().set_local(nodal_vals)
@@ -39,12 +59,12 @@ def gen_affine_avg_rom_dataset(dataset_size, resolution=40):
         qoi_errors[i,:] = qoi - qoi_r
 
     if (dataset_size > 1000):
-        np.savetxt('data/z_aff_avg_tr.txt', z_s, delimiter=",")
-        np.savetxt('data/errors_aff_avg_tr.txt', qoi_errors, delimiter=",")
+        np.savetxt('../data/z_aff_avg_tr.txt', z_s, delimiter=",")
+        np.savetxt('../data/errors_aff_avg_tr.txt', qoi_errors, delimiter=",")
 
     if (dataset_size < 400):
-        np.savetxt('data/z_aff_avg_eval.txt', z_s, delimiter=",")
-        np.savetxt('data/errors_aff_avg_eval.txt', qoi_errors, delimiter=",")
+        np.savetxt('../data/z_aff_avg_eval.txt', z_s, delimiter=",")
+        np.savetxt('../data/errors_aff_avg_eval.txt', qoi_errors, delimiter=",")
     return (z_s, qoi_errors)
 
 def gen_avg_rom_dataset(dataset_size, resolution=40):

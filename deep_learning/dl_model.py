@@ -99,6 +99,7 @@ def parametric_model(activation,
 
     # Save best model
     best_vmape = np.loadtxt('../data/best_vmape.txt').item()
+    best_vmape = 50
     if (vmape < best_vmape):
         np.savetxt('../data/best_vmape.txt',  np.array([vmape]))
         model.save_weights('../data/keras_model_avg_best')
