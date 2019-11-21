@@ -6,9 +6,10 @@ import os
 
 from dolfin import set_log_level; set_log_level(40)
 
-from tensorflow.keras import layers, Sequential
-from tensorflow.keras.optimizers import Adam, RMSprop, Adadelta
-from tensorflow.keras.layers import Dropout, Dense
+from tensorflow.keras import Sequential, Model, Input
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import *
+from tensorflow.keras.callbacks import LearningRateScheduler
 
 from deep_learning.generate_fin_dataset import gen_affine_avg_rom_dataset
 
@@ -64,7 +65,7 @@ def parametric_model(activation,
     '''
 
     if z_train is None:
-        z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
+        z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False)
 
     input_shape = z_train.shape[1]
     model = Sequential()
@@ -76,6 +77,7 @@ def parametric_model(activation,
             model.add(Dense(n_weights, activation=activation))
     model.add(Dense(9))
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+    model.load_weights('../data/keras_model_avg_best')
     history = model.fit(z_train, errors_train, epochs=n_epochs, batch_size=batch_size,
             validation_data=(z_val, errors_val))
 
@@ -129,7 +131,110 @@ def load_parametric_model_avg(activation,
 
     return model
 
-#  vmape = parametric_model('elu', Adam, 0.0003, 5, 58, 200, 2000)
+def bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape):
+    # TODO: Add weight regularization, adaptive learning rate
+    model = Sequential()
+    for i in range(n_layers):
+        if i==0:
+            model.add(Dense(2 * n_weights, input_shape=(input_shape,), activation=None))
+            model.add(BatchNormalization())
+            model.add(activation())
+        else:
+            model.add(Dense(n_weights, activation=None))
+            model.add(BatchNormalization())
+            model.add(activation())
+    model.add(Dense(9))
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+    return model
+
+def residual_unit(x, activation, n_weights):
+    res = x
+
+    out = BatchNormalization()(x)
+    out = activation(out)
+    out = Dense(n_weights, activation=None)(out)
+
+    out = BatchNormalization()(x)
+    out = activation(out)
+    out = Dense(n_weights, activation=None)(out)
+
+    out = add([res, out])
+    return out
+
+def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=1446):
+    inputs = Input(shape=(input_shape,))
+    y = Dense(n_weights, input_shape=(input_shape,), activation=None)(inputs)
+    out = residual_unit(y, activation, n_weights)
+    for i in range(1,n_layers):
+        out = residual_unit(out, activation, n_weights)
+    out = BatchNormalization()(out)
+    out = activation(out)
+    out = Dense(9)(out)
+    model = Model(inputs=inputs, outputs=out)
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+    return model
+
+def lr_schedule(epoch):
+    if epoch<=500:
+        return 3e-5
+    elif epoch<=1000:
+        return 1e-5
+    elif epoch<=1500:
+        return 5e-6
+    elif epoch<=2000:
+        return 1e-6
+    else:
+        return 5e-7
+
+def lr_schedule_pre(epoch):
+    if epoch<=500:
+        return 3e-6
+    elif epoch<=1000:
+        return 3e-6
+    elif epoch<=1500:
+        return 1e-6
+    elif epoch<=2000:
+        return 1e-6
+    else:
+        return 5e-7
+
+def load_bn_model():
+    model = res_bn_fc_model(ELU(), Adam, 3e-4, 5, 50, 1446)
+    model.summary()
+    model.load_weights('../data/keras_model_res_bn')
+    return model
+
+'''
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False)
+#  #  model = bn_fc_model(ELU, Adam, 3e-4, 5, 50, 1446)
+model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 200, 1446)
+model.summary()
+model.load_weights('../data/keras_model_res_bn_3')
+
+cbks = [LearningRateScheduler(lr_schedule)]
+history = model.fit(z_train, errors_train, epochs=2000, batch_size=400, shuffle=True, 
+        validation_data=(z_val, errors_val),
+        callbacks=cbks)
+model.save_weights('../data/keras_model_res_bn_3')
+
+#  # Plots the training and validation loss
+tr_losses = history.history['mean_absolute_percentage_error']
+vmapes = history.history['val_mean_absolute_percentage_error']
+plt.semilogy(tr_losses[200:])
+plt.semilogy(vmapes[200:])
+plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
+plt.xlabel("Epoch", fontsize=10)
+plt.ylabel("Absolute percentage error", fontsize=10)
+plt.savefig('bn_err.png', dpi=200)
+'''
+
+
+#  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False)
+#  history = model.fit(z_train, errors_train, epochs=2000, batch_size=200, shuffle=True, 
+        #  validation_data=(z_val, errors_val),
+        #  callbacks=cbks)
+
+#  vmape = parametric_model('elu', Adam, 0.00001, 5, 58, 200, 2000)
 #  print ('\nError: {:2.3f}%'.format(vmape))
 
 #  z_train, errors_trainm, z_val, errors_val = gen_avg_rom_dataset()

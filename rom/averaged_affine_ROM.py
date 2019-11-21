@@ -156,9 +156,6 @@ class AffineROMFin:
                        self.Bi *  self.v * self.w * self.ds(i+1)
         self._a = self.v * self.ds(10)
 
-        self.A = PETScMatrix()
-        self.B = assemble(self._a)[:]
-
 
         # Reduced variables (PETSc)
         self._w_r = PETSc.Vec().createSeq(self.n_r)
@@ -167,9 +164,13 @@ class AffineROMFin:
         self._C_r = PETSc.Vec().createSeq(self.n_r)
         self.B_p = as_backend_type(assemble(self._a))
         self.ksp = PETSc.KSP().create()
-        self.ksp.setType('cg')
+        #  self.ksp.setType('cg')
+        #  self.ksp.setType('gmres')
         self.psi_p = PETSc.Mat()
         self.Aphi = PETSc.Mat()
+
+        self.A = PETScMatrix()
+        self.B = self.B_p[:]
 
         self._adj_F = self.averaged_k_s[0] * inner(grad(self.w_hat), grad(self.v_trial)) \
                                                                     * self.dx(1) + \
@@ -184,6 +185,7 @@ class AffineROMFin:
         self.data = None
         self.data_ph = tf.placeholder(tf.float32, shape=(9,))
         self.B_obs = self.observation_operator()
+        self.B_obs_phi = np.dot(self.B_obs, self.phi)
 
         self.dA_dsigmak = np.zeros((self.num_params, self.n, self.n))
         self.dA_dsigmak_phi = np.zeros((self.num_params, self.n, self.n_r))
@@ -191,14 +193,6 @@ class AffineROMFin:
             A_i = assemble(inner(grad(self.w), grad(self.v))  * self.dx(i+1)).array()
             self.dA_dsigmak[i, :, :] = A_i
             self.dA_dsigmak_phi[i, :, :] = np.dot(A_i, self.phi)
-
-        self.dA_dk_phi = np.zeros((self.n, self.n, self.n_r))
-        self.B_obs_phi = np.dot(self.B_obs, self.phi)
-        for i in range(self.num_params):
-            dAi_dsigmak = np.zeros((self.n, self.n, self.num_params))
-            dAi_dsigmak[:,:,i] = self.dA_dsigmak[i, :, :]
-            dAi_dk_phi = np.dot(dAi_dsigmak, self.B_obs_phi)
-            self.dA_dk_phi = self.dA_dk_phi + dAi_dk_phi
 
         self.dl_model = err_model
 
@@ -215,6 +209,7 @@ class AffineROMFin:
         for i in range(self.num_params):
             self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
 
+        self.NN_grad_val = None
 
     #  @tf.function
     #  def cost_function(self, x_inp, data, y_ROM):
@@ -264,12 +259,11 @@ class AffineROMFin:
             self.averaged_k_s[i].assign(k_s[i])
 
         assemble(self._F, tensor=self.A)
-        #  A = self.A.array()
-        #  self.psi = np.dot(A, self.phi)
-        #  A_r = np.dot(self.psi.T, np.dot(A, self.phi))
-        #  B_r = np.dot(self.psi.T, self.B)
-        
-        #  w_r = np.linalg.solve(A_r, B_r)
+        A = self.A.array()
+        self.psi = np.dot(A, self.phi)
+        A_r = np.dot(self.psi.T, np.dot(A, self.phi))
+        B_r = np.dot(self.psi.T, self.B)
+        w_r = np.linalg.solve(A_r, B_r)
 
 #####################
 ## PETSc version
@@ -279,9 +273,9 @@ class AffineROMFin:
         self.A.mat().matMult(self.phi_p, self.Aphi)
         self.psi_p.transposeMatMult(self.Aphi, self._A_r)
         self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
-        self.ksp.setOperators(self._A_r)
-        self.ksp.solve(self._B_r, self._w_r)
-        w_r = self._w_r[:]
+        #  self.ksp.setOperators(self._A_r)
+        #  self.ksp.solve(self._B_r, self._w_r)
+        #  w_r = self._w_r[:]
 
         return w_r
 
@@ -294,13 +288,20 @@ class AffineROMFin:
             self.averaged_k_s[i].assign(k_s[i])
 
         assemble(self._F, tensor=self.A)
+
+        A = self.A.array()
+        self.psi = np.dot(A, self.phi)
+        A_r = np.dot(self.psi.T, np.dot(A, self.phi))
+        B_r = np.dot(self.psi.T, self.B)
+        w_r = np.linalg.solve(A_r, B_r)
+
         self.A.mat().matMult(self.phi_p, self.psi_p)
         self.A.mat().matMult(self.phi_p, self.Aphi)
         self.psi_p.transposeMatMult(self.Aphi, self._A_r)
         self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
-        self.ksp.setOperators(self._A_r)
-        self.ksp.solve(self._B_r, self._w_r)
-        w_r = self._w_r[:]
+        #  self.ksp.setOperators(self._A_r)
+        #  self.ksp.solve(self._B_r, self._w_r)
+        #  w_r = self._w_r[:]
 
         return w_r
 
@@ -338,7 +339,6 @@ class AffineROMFin:
         w_r = self.forward_reduced(k)
         reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
 
-        #  reduced_adj_rhs = - np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
         reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
 
         psi = self.psi_p.getDenseArray()
@@ -387,7 +387,8 @@ class AffineROMFin:
                            self.reduced_fwd_obs: reduced_fwd_obs,
                            self.data_ph: self.data})
 
-        grad =  f_x_dp_x + f_eps_dp_eps.reshape(f_eps_dp_eps.size)
+        self.NN_grad_val = f_eps_dp_eps.reshape(f_eps_dp_eps.size)
+        grad =  f_x_dp_x + self.NN_grad_val
         return grad, loss
 
     def set_reduced_basis(self, phi):
