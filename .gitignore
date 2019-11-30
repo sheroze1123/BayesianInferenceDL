@@ -111,3 +111,5 @@ data/keras_model*
 data/checkpoint
 data/best_vmape.txt
 data/*.txt
+
+*.npy
