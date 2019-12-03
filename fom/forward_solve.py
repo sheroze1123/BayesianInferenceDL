@@ -95,7 +95,7 @@ class Fin:
     A class the implements the heat conduction problem for a thermal fin
     '''
 
-    def __init__(self, V):
+    def __init__(self, V, external_obs=False):
         '''
         Initializes a thermal fin instance for a given function space
 
@@ -192,7 +192,23 @@ class Fin:
         self.fin8_A = assemble(Constant(1.0) * self.dx_s(8))
         self.fin9_A = assemble(Constant(1.0) * self.dx_s(9))
 
-        self.B_obs = self.observation_operator()
+        if external_obs:
+            # Exterior boundary for measurements
+            exterior_domain = CompiledSubDomain("!near(x[1], 0.0) && on_boundary")
+            exterior_bc = DirichletBC(V, 1, exterior_domain)
+            u = Function(V)
+            exterior_bc.apply(u.vector())
+            self.boundary_indices = (u.vector() == 1)
+            self.n_obs = 40
+            #  np.random.seed(32)
+            #  b_vals = np.random.choice(np.nonzero(self.boundary_indices)[0], self.n_obs)
+            #  np.save("rand_boundary_indices", b_vals)
+            b_vals = np.load("../bayesian_inference/rand_boundary_indices.npy")
+            self.B_obs = np.zeros((self.n_obs, self.dofs))
+            self.B_obs[np.arange(self.n_obs), b_vals] = 1
+        else:
+            self.n_obs = 9
+            self.B_obs = self.observation_operator()
 
         # Randomly sampling state vector for inverse problems
         #  self.n_samples = 3
@@ -262,13 +278,8 @@ class Fin:
         '''
         Returns the quantities of interest given the state variable
         '''
-        #  average = assemble(z * self.dx)/self.domain_measure
-
-        #  z_vec = z.vector()[:] #TODO: Very inefficient
-        #  rand_sample = z_vec[self.samp_idx]
-
-        #TODO: External surface sampling. Most physically realistic
-        return self.subfin_avg_op(x)
+        return np.dot(self.B_obs, x.vector()[:])
+        #  return self.subfin_avg_op(x)
 
     def reduced_qoi_operator(self, z_r):
         z_nodal_vals = np.dot(self.phi, z_r)

@@ -21,23 +21,25 @@ from rom.averaged_affine_ROM import AffineROMFin
 from deep_learning.dl_model import load_parametric_model_avg, load_bn_model
 from gaussian_field import make_cov_chol
 
+randobs = True
+
 resolution = 40
 V = get_space(resolution)
 chol = make_cov_chol(V, length=1.2)
 
 # Setup DL error model
-err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
-#  err_model = load_bn_model()
+#  err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
+err_model = load_bn_model()
 
 # Initialize reduced order model
 phi = np.loadtxt('../data/basis_nine_param.txt',delimiter=",")
-solver_r = AffineROMFin(V, err_model, phi)
+solver_r = AffineROMFin(V, err_model, phi, randobs)
 
 # Setup synthetic observations
-solver = Fin(V)
+solver = Fin(V, randobs)
 z_true = dl.Function(V)
-norm = np.random.randn(len(chol))
-nodal_vals = np.exp(0.5 * chol.T @ norm)
+#  norm = np.random.randn(len(chol))
+#  nodal_vals = np.exp(0.5 * chol.T @ norm)
 nodal_vals = np.load('res_x.npy')
 z_true.vector().set_local(nodal_vals)
 vmax = np.max(nodal_vals)
@@ -139,9 +141,9 @@ class RSolverWrapper:
         self.grad = self.grad + dl.assemble(self.solver.grad_reg)
         return self.grad
 
-#  solver_w = RSolverWrapper(err_model, solver_r, solver)
+solver_w = RSolverWrapper(err_model, solver_r, solver)
 #  solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
-solver_w = SolverWrapper(solver, obs_data)
+#  solver_w = SolverWrapper(solver, obs_data)
 
 bounds = Bounds(vmin, vmax)
 #  bounds = Bounds(0.3, 0.7)

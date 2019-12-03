@@ -17,8 +17,6 @@ from gaussian_field import make_cov_chol
 # Tensorflow related imports
 from tensorflow.keras.optimizers import Adam
 
-from rom.generate_reduced_basis_nine_param import AffineROMFin as Aff
-
 class SolverWrapper:
     def __init__(self, solver, data): 
         self.solver = solver
@@ -98,7 +96,7 @@ class RSolverWrapper:
 resolution = 40
 V = get_space(resolution)
 chol = make_cov_chol(V, length=1.2)
-solver = Fin(V)
+solver = Fin(V, True)
 
 # Generate synthetic observations
 z_true = dl.Function(V)
@@ -114,11 +112,7 @@ err_model = load_bn_model()
 
 # Initialize reduced order model
 phi = np.loadtxt('../data/basis_nine_param.txt',delimiter=",")
-solver_r = AffineROMFin(V, err_model, phi)
-solver_r2 = Aff(V)
-solver_r2.set_phi(phi)
-solver_r2.set_data(data)
-solver_rom2 = RSolverWrapper(err_model, solver_r2, solver)
+solver_r = AffineROMFin(V, err_model, phi, True)
 
 solver_r.set_data(data)
 
@@ -252,16 +246,6 @@ for h in hs:
     #  grad = solver_romml.gradient(z_ + h * eps_z)
     #  dir_grad = np.dot(grad, eps_z)
     #  grads_romml.append(dir_grad)
-
-pi_rom2 = []
-for h in hs:
-    pi_h = solver_rom2.cost_function(z_ + h * eps_z)
-    pi_rom2.append(pi_h)
-
-plt.plot(hs, pi_rom2)
-plt.savefig('func_dir_ROM2.png', dpi=200)
-plt.cla()
-plt.clf()
 
 plt.plot(hs, pi_foms)
 plt.savefig('func_dir_FOM.png', dpi=200)

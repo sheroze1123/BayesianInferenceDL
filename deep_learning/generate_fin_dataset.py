@@ -5,13 +5,14 @@ import numpy as np
 import tensorflow as tf
 from pandas import read_csv
 from dolfin import *
+from tqdm import tqdm
 
 from fom.forward_solve import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin
 from bayesian_inference.gaussian_field import make_cov_chol
-from tensorflow.keras import layers, Sequential
-from tensorflow.keras.layers import Dropout, Dense
+from tensorflow.keras import Model, Sequential, Input
+from tensorflow.keras.layers import *
 
 # Tensorflow related imports
 from tensorflow.keras.optimizers import Adam
@@ -29,22 +30,51 @@ def load_parametric_model_avg(activation,
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
     return model
 
-def gen_affine_avg_rom_dataset(dataset_size, resolution=40):
+def residual_unit(x, activation, n_weights):
+    res = x
+
+    out = BatchNormalization()(x)
+    out = activation(out)
+    out = Dense(n_weights, activation=None)(out)
+
+    out = BatchNormalization()(x)
+    out = activation(out)
+    out = Dense(n_weights, activation=None)(out)
+
+    out = add([res, out])
+    return out
+
+def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=1446, 
+        output_shape=9):
+    inputs = Input(shape=(input_shape,))
+    y = Dense(n_weights, input_shape=(input_shape,), activation=None)(inputs)
+    out = residual_unit(y, activation, n_weights)
+    for i in range(1,n_layers):
+        out = residual_unit(out, activation, n_weights)
+    out = BatchNormalization()(out)
+    out = activation(out)
+    out = Dense(output_shape)(out)
+    model = Model(inputs=inputs, outputs=out)
+    model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
+    return model
+
+def gen_affine_avg_rom_dataset(dataset_size, resolution=40, genrand=False):
     V = get_space(resolution)
     chol = make_cov_chol(V, length=1.6)
     z = Function(V)
-    solver = Fin(V)
+    solver = Fin(V, genrand)
     phi = np.loadtxt('../data/basis_nine_param.txt',delimiter=",")
-    err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
-    solver_r = AffineROMFin(V, err_model, phi)
-    solver_r.set_reduced_basis(phi)
-    qoi_errors = np.zeros((dataset_size, 9))
+
+    #  err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
+    err_model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 200, 1446, 40)
+
+    solver_r = AffineROMFin(V, err_model, phi, genrand)
+    qoi_errors = np.zeros((dataset_size, solver_r.n_obs))
 
     # TODO: Needs to be fixed for higher order functions
     z_s = np.zeros((dataset_size, V.dim()))
 
-    for i in range(dataset_size):
-        print(i)
+    for i in tqdm(range(dataset_size)):
         norm = np.random.randn(len(chol))
         nodal_vals = np.exp(0.5 * chol.T @ norm)
         z.vector().set_local(nodal_vals)
@@ -216,9 +246,9 @@ def load_saved_dataset():
     Loads a training dataset from disk
     '''
     try:
-        z_s = np.loadtxt('data/z_s_train.txt', delimiter=",")
+        z_s = np.loadtxt('../data/z_s_train.txt', delimiter=",")
         #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values 
-        errors = np.loadtxt('data/errors_train.txt', delimiter=",", ndmin=2)
+        errors = np.loadtxt('../data/errors_train.txt', delimiter=",", ndmin=2)
     except (FileNotFoundError, OSError) as err:
         print ("Error in loading saved training dataset. Run generate_and_save_dataset.")
         raise err
@@ -241,13 +271,12 @@ def generate_and_save_dataset(dataset_size, resolution=40):
         A_r, B_r, C_r, x_r, y_r = solver.reduced_forward(A, B, C, psi, phi)
         errors[i][0] = y - y_r 
 
-    np.savetxt('data/z_s_train.txt', z_s, delimiter=",")
-    np.savetxt('data/errors_train.txt', errors, delimiter=",")
+    np.savetxt('../data/z_s_train.txt', z_s, delimiter=",")
+    np.savetxt('../data/errors_train.txt', errors, delimiter=",")
 
 def create_initializable_iterator(buffer_size, batch_size):
-    z_s = np.loadtxt('data/z_s_train.txt', delimiter=",")
-    #  z_s = read_csv('data/z_s_train.txt', delimiter=",").values
-    errors = np.loadtxt('data/errors_train.txt', delimiter=",", ndmin=2)
+    z_s = np.loadtxt('../data/z_s_train.txt', delimiter=",")
+    errors = np.loadtxt('../data/errors_train.txt', delimiter=",", ndmin=2)
 
     features_placeholder = tf.placeholder(z_s.dtype, z_s.shape)
     labels_placeholder = tf.placeholder(errors.dtype, errors.shape)
@@ -256,43 +285,3 @@ def create_initializable_iterator(buffer_size, batch_size):
 
     iterator = dataset.shuffle(buffer_size).batch(batch_size).repeat().make_initializable_iterator()
 
-
-class FinInput:
-    '''
-    A class to create a thermal fin instance with Tensorflow input functions
-    '''
-    def __init__(self, batch_size, resolution):
-        self.resolution = resolution
-        self.V = get_space(resolution)
-        self.dofs = len(self.V.dofmap().dofs())
-        self.phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
-        self.batch_size = batch_size
-        self.solver = Fin(self.V)
-
-    def train_input_fn(self):
-        params = np.random.uniform(0.1, 1, (self.batch_size, self.dofs))
-        errors = np.zeros((self.batch_size, 1))
-
-        for i in range(self.batch_size):
-            m = Function(self.V)
-            m.vector().set_local(params[i,:])
-            w, y, A, B, C = self.solver.forward(m)
-            psi = np.dot(A, self.phi)
-            A_r, B_r, C_r, x_r, y_r = self.solver.reduced_forward(A, B, C, psi, self.phi)
-            errors[i][0] = y - y_r 
-
-        return ({'x':tf.convert_to_tensor(params)}, tf.convert_to_tensor(errors))
-
-    def eval_input_fn(self):
-        params = np.random.uniform(0.1, 1, (self.batch_size, self.dofs))
-        errors = np.zeros((self.batch_size, 1))
-
-        for i in range(self.batch_size):
-            m = Function(self.V)
-            m.vector().set_local(params[i,:])
-            w, y, A, B, C = self.solver.forward(m)
-            psi = np.dot(A, self.phi)
-            A_r, B_r, C_r, x_r, y_r = self.solver.reduced_forward(A, B, C, psi, self.phi)
-            errors[i][0] = y - y_r 
-
-        return ({'x':tf.convert_to_tensor(params)}, tf.convert_to_tensor(errors))

@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib; matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import os
+import warnings
+warnings.filterwarnings('ignore',category=FutureWarning)
 
 from dolfin import set_log_level; set_log_level(40)
 
@@ -13,7 +15,7 @@ from tensorflow.keras.callbacks import LearningRateScheduler
 
 from deep_learning.generate_fin_dataset import gen_affine_avg_rom_dataset
 
-def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
+def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200, genrand=False):
     '''
     Load dataset where the conductivity is parametrized as a FEniCS function
     and the QoI is the averaged temperature per subfin
@@ -22,7 +24,7 @@ def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
         z_train = np.loadtxt('../data/z_aff_avg_tr.txt', delimiter=',')
         errors_train =  np.loadtxt('../data/errors_aff_avg_tr.txt', delimiter=',')
     else:
-        (z_train, errors_train) = gen_affine_avg_rom_dataset(tr_size)
+        (z_train, errors_train) = gen_affine_avg_rom_dataset(tr_size, genrand=genrand)
         np.savetxt('../data/z_aff_avg_tr.txt', z_train, delimiter=',')
         np.savetxt('../data/errors_aff_avg_tr.txt', errors_train, delimiter=',')
 
@@ -30,7 +32,7 @@ def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200):
         z_val = np.loadtxt('../data/z_aff_avg_eval.txt', delimiter=',')
         errors_val =  np.loadtxt('../data/errors_aff_avg_eval.txt', delimiter=',')
     else:
-        (z_val, errors_val) = gen_affine_avg_rom_dataset(v_size)
+        (z_val, errors_val) = gen_affine_avg_rom_dataset(v_size, genrand=genrand)
         np.savetxt('../data/z_aff_avg_eval.txt', z_val, delimiter=',')
         np.savetxt('../data/errors_aff_avg_eval.txt', errors_val, delimiter=',')
 
@@ -161,7 +163,8 @@ def residual_unit(x, activation, n_weights):
     out = add([res, out])
     return out
 
-def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=1446):
+def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=1446, 
+        output_shape=9):
     inputs = Input(shape=(input_shape,))
     y = Dense(n_weights, input_shape=(input_shape,), activation=None)(inputs)
     out = residual_unit(y, activation, n_weights)
@@ -169,53 +172,52 @@ def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=
         out = residual_unit(out, activation, n_weights)
     out = BatchNormalization()(out)
     out = activation(out)
-    out = Dense(9)(out)
+    out = Dense(output_shape)(out)
     model = Model(inputs=inputs, outputs=out)
     model.compile(loss='mse', optimizer=optimizer(lr=lr), metrics=['mape'])
     return model
 
 def lr_schedule(epoch):
     if epoch<=500:
-        return 3e-5
+        return 1e-4
     elif epoch<=1000:
-        return 1e-5
+        return 5e-5
     elif epoch<=1500:
-        return 5e-6
+        return 3e-5
     elif epoch<=2000:
-        return 1e-6
+        return 1e-5
     else:
-        return 5e-7
+        return 1e-6
 
 def lr_schedule_pre(epoch):
     if epoch<=500:
-        return 3e-6
+        return 3e-5
     elif epoch<=1000:
         return 3e-6
     elif epoch<=1500:
-        return 1e-6
+        return 3e-6
     elif epoch<=2000:
         return 1e-6
     else:
         return 5e-7
 
 def load_bn_model():
-    model = res_bn_fc_model(ELU(), Adam, 3e-4, 5, 50, 1446)
+    model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 50, 1446, 40)
     model.summary()
-    model.load_weights('../data/keras_model_res_bn')
+    model.load_weights('../data/keras_model_res_bn_random')
     return model
 
 '''
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False)
-#  #  model = bn_fc_model(ELU, Adam, 3e-4, 5, 50, 1446)
-model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 200, 1446)
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
+model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 50, 1446, 40)
 model.summary()
-model.load_weights('../data/keras_model_res_bn_3')
+model.load_weights('../data/keras_model_res_bn_random')
 
 cbks = [LearningRateScheduler(lr_schedule)]
 history = model.fit(z_train, errors_train, epochs=2000, batch_size=400, shuffle=True, 
         validation_data=(z_val, errors_val),
         callbacks=cbks)
-model.save_weights('../data/keras_model_res_bn_3')
+model.save_weights('../data/keras_model_res_bn_random')
 
 #  # Plots the training and validation loss
 tr_losses = history.history['mean_absolute_percentage_error']
@@ -227,34 +229,3 @@ plt.xlabel("Epoch", fontsize=10)
 plt.ylabel("Absolute percentage error", fontsize=10)
 plt.savefig('bn_err.png', dpi=200)
 '''
-
-
-#  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False)
-#  history = model.fit(z_train, errors_train, epochs=2000, batch_size=200, shuffle=True, 
-        #  validation_data=(z_val, errors_val),
-        #  callbacks=cbks)
-
-#  vmape = parametric_model('elu', Adam, 0.00001, 5, 58, 200, 2000)
-#  print ('\nError: {:2.3f}%'.format(vmape))
-
-#  z_train, errors_trainm, z_val, errors_val = gen_avg_rom_dataset()
-#  vmape = parametric_model('relu', Adam, 0.001128, 4, 66, 94, 400, 
-        #  z_train, errors_train, z_val, errors_val)
-
-
-
-#  z_train = np.loadtxt('data/z_avg_tr.txt', delimiter=",")
-#  errors_train = np.loadtxt('data/errors_avg_tr.txt', delimiter=",")
-#  z_val = np.loadtxt('data/z_avg_eval.txt', delimiter=",")
-#  errors_val = np.loadtxt('data/errors_avg_eval.txt', delimiter=",")
-#  vmape = parametric_model('elu', Adam, 0.001, 4, 50, 10, 400, 
-        #  z_train, errors_train, z_val, errors_val)
-#  print ('\nError: {:2.3f}%'.format(vmape))
-
-#  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
-#  model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, 1446)
-#  err_predict = model.predict(z_val)
-#  pred_err = np.linalg.norm(err_predict - errors_val)
-#  pred_rel_err = np.linalg.norm(err_predict - errors_val) / np.linalg.norm(errors_val)
-#  print(pred_err)
-#  print(pred_rel_err) # best being 0.016

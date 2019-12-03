@@ -3,6 +3,7 @@ sys.path.append('../')
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from utils import nb
 
 from dolfin import *
 from mshr import Rectangle, generate_mesh
@@ -53,7 +54,7 @@ class AffineROMFin:
     A class the implements the heat conduction problem for a thermal fin
     '''
 
-    def __init__(self, V, err_model, phi):
+    def __init__(self, V, err_model, phi, external_obs=False):
         '''
         Initializes a thermal fin instance for a given function space
 
@@ -105,6 +106,7 @@ class AffineROMFin:
         self.fin7.mark(domains, 7)
         self.fin8.mark(domains, 8)
         self.fin9.mark(domains, 9)
+
 
         # Marking boundaries for boundary conditions
         bottom = CompiledSubDomain("near(x[1], side) && on_boundary", side = 0.0)
@@ -167,7 +169,6 @@ class AffineROMFin:
         #  self.ksp.setType('cg')
         #  self.ksp.setType('gmres')
         self.psi_p = PETSc.Mat()
-        self.Aphi = PETSc.Mat()
 
         self.A = PETScMatrix()
         self.B = self.B_p[:]
@@ -183,9 +184,29 @@ class AffineROMFin:
 
         self.psi = None
         self.data = None
-        self.data_ph = tf.placeholder(tf.float32, shape=(9,))
-        self.B_obs = self.observation_operator()
+
+        if external_obs:
+            # Exterior boundary for measurements
+            exterior_domain = CompiledSubDomain("!near(x[1], 0.0) && on_boundary")
+            exterior_bc = DirichletBC(V, 1, exterior_domain)
+            u = Function(V)
+            exterior_bc.apply(u.vector())
+            self.boundary_indices = (u.vector() == 1)
+            self.n_obs = 40
+            #  np.random.seed(32)
+            #  b_vals = np.random.choice(np.nonzero(self.boundary_indices)[0], self.n_obs)
+            #  np.save("rand_boundary_indices", b_vals)
+            b_vals = np.load("../bayesian_inference/rand_boundary_indices.npy")
+            self.B_obs = np.zeros((self.n_obs, self.dofs))
+            self.B_obs[np.arange(self.n_obs), b_vals] = 1
+        else:
+            self.n_obs = 9
+            self.B_obs = self.observation_operator()
+
+        self.dsigma_dk = self.observation_operator()
+        self.data_ph = tf.placeholder(tf.float32, shape=(self.n_obs,))
         self.B_obs_phi = np.dot(self.B_obs, self.phi)
+        #  import pdb; pdb.set_trace()
 
         self.dA_dsigmak = np.zeros((self.num_params, self.n, self.n))
         self.dA_dsigmak_phi = np.zeros((self.num_params, self.n, self.n_r))
@@ -197,25 +218,16 @@ class AffineROMFin:
         self.dl_model = err_model
 
         # Placeholders and precomputed values required for setting up gradients
-        self.reduced_fwd_obs = tf.placeholder(tf.float32, shape=(9,))
+        self.reduced_fwd_obs = tf.placeholder(tf.float32, shape=(self.n_obs,))
         self.loss = tf.divide(tf.reduce_sum(tf.square(
             self.data_ph - self.reduced_fwd_obs - self.dl_model.layers[-1].output)), 2)
         self.NN_grad = gradients(self.loss, self.dl_model.input)
 
-        self.dL_dsigmak = np.zeros(self.num_params)
-
-
-        self.dA_dsigmak_phi = np.zeros((self.num_params, self.dofs, self.phi.shape[1]))
-        for i in range(self.num_params):
-            self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
+        #  self.dA_dsigmak_phi = np.zeros((self.num_params, self.dofs, self.phi.shape[1]))
+        #  for i in range(self.num_params):
+            #  self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
 
         self.NN_grad_val = None
-
-    #  @tf.function
-    #  def cost_function(self, x_inp, data, y_ROM):
-        #  y_NN = self.dl_model.predict([x_inp])[0]
-        #  return tf.divide(tf.reduce_sum(tf.square(data - y_ROM - y_NN)), 2)
-
 
     def forward(self, k):
         '''
@@ -254,86 +266,50 @@ class AffineROMFin:
         '''
 
         k_s = self.subfin_avg_op(k)
+        return self.forward_nine_param_reduced(k_s)
 
-        for i in range(len(k_s)):
-            self.averaged_k_s[i].assign(k_s[i])
-
-        assemble(self._F, tensor=self.A)
-        A = self.A.array()
-        self.psi = np.dot(A, self.phi)
-        A_r = np.dot(self.psi.T, np.dot(A, self.phi))
-        B_r = np.dot(self.psi.T, self.B)
-        w_r = np.linalg.solve(A_r, B_r)
-
-#####################
-## PETSc version
-####################
-
-        self.A.mat().matMult(self.phi_p, self.psi_p)
-        self.A.mat().matMult(self.phi_p, self.Aphi)
-        self.psi_p.transposeMatMult(self.Aphi, self._A_r)
-        self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
-        #  self.ksp.setOperators(self._A_r)
-        #  self.ksp.solve(self._B_r, self._w_r)
-        #  w_r = self._w_r[:]
-
-        return w_r
-
-    def forward_nine_param(self, k_s):
+    def forward_nine_param_reduced(self, k_s):
         '''
         Given average thermal conductivity values of each subfin,
         returns the reduced forward solve
+
+        Args:
+            k_s : Average conductivity of each subfin
+
+        Returns:
+            w_r : Temperature in reduced dimensions
         '''
         for i in range(len(k_s)):
             self.averaged_k_s[i].assign(k_s[i])
 
         assemble(self._F, tensor=self.A)
-
-        A = self.A.array()
-        self.psi = np.dot(A, self.phi)
-        A_r = np.dot(self.psi.T, np.dot(A, self.phi))
-        B_r = np.dot(self.psi.T, self.B)
-        w_r = np.linalg.solve(A_r, B_r)
-
         self.A.mat().matMult(self.phi_p, self.psi_p)
-        self.A.mat().matMult(self.phi_p, self.Aphi)
-        self.psi_p.transposeMatMult(self.Aphi, self._A_r)
+        self.psi_p.transposeMatMult(self.psi_p, self._A_r)
         self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
+        w_r = np.linalg.solve(self._A_r.getDenseArray(), self._B_r.getArray())
         #  self.ksp.setOperators(self._A_r)
         #  self.ksp.solve(self._B_r, self._w_r)
         #  w_r = self._w_r[:]
-
         return w_r
 
     def qoi(self, w):
-        return self.subfin_avg_op(w) 
+        '''
+        Computes the quantity of interest
+
+        Args:
+            w : Temperature distribution over the fin
+        '''
+        return np.dot(self.B_obs, w.vector()[:])
+        #  return self.subfin_avg_op(w) 
 
     def qoi_reduced(self, w_r):
-        #  w = Function(self.V)
-        #  w.vector().set_local(np.dot(self.phi, w_r))
-        #  return self.subfin_avg_op(w)
+        '''
+        Computes the quantity of interest
+
+        Args:
+            w_r : Temperature distribution over the fin in reduced dimensions
+        '''
         return np.dot(self.B_obs_phi, w_r)
-
-    #  def grad(self, k):
-        #  k_s = self.subfin_avg_op(k)
-        #  for i in range(len(k_s)):
-            #  self.averaged_k_s[i].assign(k_s[i])
-
-        #  z = Function(self.V)
-        #  solve(self._F == self._a, z) 
-        #  pred_obs = self.qoi(z)
-
-        #  v = Function(self.V)
-        #  adj_RHS = -np.dot(self.B_obs.T, pred_obs - self.data)
-        #  assemble(self._adj_F, tensor=self.A_adj)
-        #  v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
-        #  v.vector().set_local(v_nodal_vals)
-
-        #  dL_dsigmak = np.zeros(len(self.averaged_k_s))
-        #  for i in range(len(dL_dsigmak)):
-            #  dL_dsigmak[i] = assemble(inner(grad(z), grad(v)) * self.dx(i+1))
-
-        #  return np.dot(self.B_obs.T, dL_dsigmak)
 
     def grad_reduced(self, k):
         w_r = self.forward_reduced(k)
@@ -341,14 +317,14 @@ class AffineROMFin:
 
         reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
 
-        psi = self.psi_p.getDenseArray()
         A_r = self._A_r.getDenseArray()
         v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
 
+        psi = self.psi_p.getDenseArray()
         psi_v_r = np.dot(psi, v_r)
 
         A_phi_w_r = np.dot(self.dA_dsigmak_phi, w_r).T
-        dROM_dk = np.dot(A_phi_w_r, self.B_obs)
+        dROM_dk = np.dot(A_phi_w_r, self.dsigma_dk)
         dJ_dk = np.dot(psi_v_r.T, dROM_dk)
 
         J = 0.5 * np.linalg.norm(self.data - reduced_fwd_obs)**2
@@ -364,15 +340,14 @@ class AffineROMFin:
 
         reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - romml_fwd_obs)
 
-        psi = self.psi_p.getDenseArray()
-
         A_r = self._A_r.getDenseArray()
         v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
 
+        psi = self.psi_p.getDenseArray()
         psi_v_r = np.dot(psi, v_r)
 
         A_phi_w_r = np.dot(self.dA_dsigmak_phi, w_r).T
-        dROM_dk = np.dot(A_phi_w_r, self.B_obs)
+        dROM_dk = np.dot(A_phi_w_r, self.dsigma_dk)
         f_x_dp_x = np.dot(psi_v_r.T, dROM_dk)
 
         x_inp = [k.vector()[:]]
@@ -390,15 +365,6 @@ class AffineROMFin:
         self.NN_grad_val = f_eps_dp_eps.reshape(f_eps_dp_eps.size)
         grad =  f_x_dp_x + self.NN_grad_val
         return grad, loss
-
-    def set_reduced_basis(self, phi):
-        '''
-        Sets the computed trial basis for the ROM system
-
-        Arguments:
-            phi: numpy array    - reduced basis
-        '''
-        self.phi = phi
 
     def set_data(self, data):
         self.data = data
@@ -444,5 +410,7 @@ class AffineROMFin:
             fin7_avg[:],
             fin8_avg[:],
             fin9_avg[:]))
+
+        #TODO: If random surface obs, change this
 
         return B
