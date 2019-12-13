@@ -11,6 +11,7 @@ from dolfin import set_log_level; set_log_level(40)
 from tensorflow.keras import Sequential, Model, Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import *
+from tensorflow.keras.regularizers import l1_l2, l2, l1
 from tensorflow.keras.callbacks import LearningRateScheduler
 
 from deep_learning.generate_fin_dataset import gen_affine_avg_rom_dataset
@@ -154,11 +155,11 @@ def residual_unit(x, activation, n_weights):
 
     out = BatchNormalization()(x)
     out = activation(out)
-    out = Dense(n_weights, activation=None)(out)
+    out = Dense(n_weights, activation=None, kernel_regularizer=l1_l2(1e-4, 1e-4))(out)
 
     out = BatchNormalization()(x)
     out = activation(out)
-    out = Dense(n_weights, activation=None)(out)
+    out = Dense(n_weights, activation=None, kernel_regularizer=l1_l2(1e-4, 1e-4))(out)
 
     out = add([res, out])
     return out
@@ -166,7 +167,8 @@ def residual_unit(x, activation, n_weights):
 def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=1446, 
         output_shape=9):
     inputs = Input(shape=(input_shape,))
-    y = Dense(n_weights, input_shape=(input_shape,), activation=None)(inputs)
+    y = Dense(n_weights, input_shape=(input_shape,), activation=None, 
+            kernel_regularizer=l1_l2(1e-4, 1e-4))(inputs)
     out = residual_unit(y, activation, n_weights)
     for i in range(1,n_layers):
         out = residual_unit(out, activation, n_weights)
@@ -178,22 +180,22 @@ def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=
     return model
 
 def lr_schedule(epoch):
-    if epoch<=500:
-        return 1e-4
-    elif epoch<=1000:
-        return 5e-5
-    elif epoch<=1500:
-        return 3e-5
-    elif epoch<=2000:
+    if epoch<=3000:
+        return 3e-4
+    elif epoch<=6000:
         return 1e-5
+    elif epoch<=7500:
+        return 5e-6
+    elif epoch<=9000:
+        return 1e-7
     else:
-        return 1e-6
+        return 1e-7
 
 def lr_schedule_pre(epoch):
     if epoch<=500:
-        return 3e-5
+        return 3e-4
     elif epoch<=1000:
-        return 3e-6
+        return 3e-5
     elif epoch<=1500:
         return 3e-6
     elif epoch<=2000:
@@ -202,22 +204,22 @@ def lr_schedule_pre(epoch):
         return 5e-7
 
 def load_bn_model():
-    model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 50, 1446, 40)
+    model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, 40)
     model.summary()
-    model.load_weights('../data/keras_model_res_bn_random')
+    model.load_weights('../data/keras_model_res_bn_random_e_3')
     return model
 
-'''
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
-model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 50, 1446, 40)
+#  '''
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(True, genrand=True)
+model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
 model.summary()
-model.load_weights('../data/keras_model_res_bn_random')
+#  model.load_weights('../data/keras_model_res_bn_random_e_3')
 
 cbks = [LearningRateScheduler(lr_schedule)]
-history = model.fit(z_train, errors_train, epochs=2000, batch_size=400, shuffle=True, 
+history = model.fit(z_train, errors_train, epochs=10000, batch_size=500, shuffle=True, 
         validation_data=(z_val, errors_val),
         callbacks=cbks)
-model.save_weights('../data/keras_model_res_bn_random')
+model.save_weights('../data/keras_model_res_bn_random_e_3_overfit')
 
 #  # Plots the training and validation loss
 tr_losses = history.history['mean_absolute_percentage_error']
@@ -228,4 +230,4 @@ plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
 plt.xlabel("Epoch", fontsize=10)
 plt.ylabel("Absolute percentage error", fontsize=10)
 plt.savefig('bn_err.png', dpi=200)
-'''
+#  '''

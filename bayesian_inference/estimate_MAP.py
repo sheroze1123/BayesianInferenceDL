@@ -38,21 +38,26 @@ solver_r = AffineROMFin(V, err_model, phi, randobs)
 # Setup synthetic observations
 solver = Fin(V, randobs)
 z_true = dl.Function(V)
+
+#Generate random Gaussian field
 #  norm = np.random.randn(len(chol))
 #  nodal_vals = np.exp(0.5 * chol.T @ norm)
-nodal_vals = np.load('res_x.npy')
-z_true.vector().set_local(nodal_vals)
-vmax = np.max(nodal_vals)
-vmin = np.min(nodal_vals)
+
+#Load random Gaussian field
+#  nodal_vals = np.load('res_x.npy')
+#  z_true.vector().set_local(nodal_vals)
+#  vmax = np.max(nodal_vals)
+#  vmin = np.min(nodal_vals)
 
 #  z_true = dl.interpolate(dl.Expression('0.3 + 0.01 * x[0] * x[1] + 0.05 * (sin(2*x[1])*cos(2*x[0]) + 1.5)', degree=2),V)
 #  vmax = 0.7
 #  vmin = 0.3
 
-#  z_true = solver.nine_param_to_function([1.1, 1.11, 1.13, 1.12, 1.117, 1.1, 1.127, 1.118, 1.114])
-#  np.save('z_tr_pw', z_true.vector()[:])
-#  vmax = 1.129
-#  vmin = 1.100
+#Piece-wise constant field
+z_true = solver.nine_param_to_function([1.1, 1.11, 1.13, 1.12, 1.117, 1.1, 1.127, 1.118, 1.114])
+np.save('z_tr_pw', z_true.vector()[:])
+vmax = 1.130
+vmin = 1.095
 
 
 w, y, A, B, C = solver.forward(z_true)
@@ -145,7 +150,7 @@ solver_w = RSolverWrapper(err_model, solver_r, solver)
 #  solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
 #  solver_w = SolverWrapper(solver, obs_data)
 
-bounds = Bounds(vmin, vmax)
+bounds = Bounds(0.95 * vmin, 1.05 * vmax)
 #  bounds = Bounds(0.3, 0.7)
 res = minimize(solver_w.cost_function, z_0_nodal_vals, 
         method='L-BFGS-B', 
@@ -155,36 +160,11 @@ res = minimize(solver_w.cost_function, z_0_nodal_vals,
 
 print(f'status: {res.success}, message: {res.message}, n_it: {res.nit}')
 print(f'Minimum cost: {res.fun:.3F}')
-#  np.save('res_x',res.x)
-
-#  solver_r = AffineROMFin(V, err_model, phi)
-#  solver = Fin(V)
-#  z_true.vector().set_local(res.x)
-#  vmax = np.max(res.x)
-#  vmin = np.min(res.x)
-#  w, y, A, B, C = solver.forward(z_true)
-#  obs_data = solver.qoi_operator(w)
-#  solver_r.set_data(obs_data)
-#  solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
-
-#  norm = np.random.randn(len(chol))
-#  z_0_nodal_vals = np.exp(0.5 * chol.T @ norm)
-#  bounds = Bounds(vmax, vmin)
-#  res = minimize(solver_w.cost_function, z_0_nodal_vals, 
-        #  method='L-BFGS-B', 
-        #  jac=solver_w.gradient,
-        #  bounds=bounds,
-        #  options={'ftol':1e-10, 'gtol':1e-8})
-
-#  print(f'status: {res.success}, message: {res.message}, n_it: {res.nit}')
-#  print(f'Minimum cost: {res.fun:.3F}')
-
-
 
 ####################3
 
 z.vector().set_local(res.x)
-np.save('res_FOM', res.x)
+np.save('res_ROM', res.x)
 w,y, _, _, _ = solver.forward(z)
 pred_obs = solver.qoi_operator(w)
 obs_err = np.linalg.norm(obs_data - pred_obs)
@@ -212,15 +192,3 @@ rel_err = 100 * np.abs(z_true.vector()[:] - z.vector()[:])/np.sqrt(z_true_norm)
 z_err = dl.Function(V)
 z_err.vector().set_local(rel_err)
 np.save('rel_err',rel_err)
-#  plt.cla()
-#  plt.clf()
-#  p = dl.plot(z_err)
-#  plt.colorbar(p)
-#  plt.savefig('err.png', dpi=200)
-
-#  rel_err_f = 100 * (z_true - z)/np.sqrt(z_true_norm)
-#  plt.cla()
-#  plt.clf()
-#  p = dl.plot(rel_err_f)
-#  plt.colorbar(p)
-#  plt.savefig('rel_err.png', dpi=200)

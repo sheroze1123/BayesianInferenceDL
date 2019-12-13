@@ -8,13 +8,13 @@ from tensorflow.keras.optimizers import Adam, Adadelta
 from tensorflow.keras.layers import *
 from dl_model import res_bn_fc_model, parametric_model, load_dataset_avg_rom
 
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom()
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(True, genrand=True)
 
 # Defines the hyperparameter space
 activations = Categorical([ELU(), Activation('tanh'), Activation('sigmoid')], 
         name='activation')
 optimizers = Categorical([Adam, Adadelta], name='optimizer')
-learning_rates = Real(1e-8, 1e-3, prior="log-uniform", name='lr')
+learning_rates = Real(1e-7, 3e-4, prior="log-uniform", name='lr')
 layer_sizes = Integer(1, 6, name='n_layers')
 weight_vals = Integer(10, 200, name='n_weights')
 batch_sizes = Integer(100, 500, name='batch_size')
@@ -29,7 +29,7 @@ def obj(activation, optimizer, lr, n_layers, n_weights, batch_size):
      Num. hidden Layers: {}
      Num. weights: {}
      Batch size: {}\n'''.format(activation, optimizer, lr, n_layers, n_weights, batch_size))
-    model = res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights)  
+    model = res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, 1446, 40)  
     history = model.fit(z_train, errors_train, epochs=500, batch_size=batch_size,
             validation_data=(z_val, errors_val))
     vmape = history.history['val_mean_absolute_percentage_error'][-1]
