@@ -20,7 +20,7 @@ import theano
 from fom.forward_solve import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin 
-from deep_learning.dl_model import load_parametric_model_avg
+from deep_learning.dl_model import load_parametric_model_avg, load_bn_model
 from gaussian_field import make_cov_chol
 
 class SqError:
@@ -28,32 +28,33 @@ class SqError:
     Wrapper class interfacing Theano operators and ROMML
     to compute forward solves and parameter gradients
     '''
-    def __init__(self, V, chol):
+    def __init__(self, V, chol, randobs):
         '''
         Parameters:
             V - FEniCS FunctionSpace
             chol - Covariance matrix to define Gaussian field over V
         '''
         self._V = V
-        self._solver = Fin(self._V)
+        self._solver = Fin(self._V, randobs)
         self._pred_k = dl.Function(self._V)
 
         # Setup synthetic observations
         self.k_true = dl.Function(self._V)
-        norm = np.random.randn(len(chol))
-        nodal_vals = np.exp(0.5 * chol.T @ norm)
+        #  norm = np.random.randn(len(chol))
+        #  nodal_vals = np.exp(0.5 * chol.T @ norm)
+        nodal_vals = np.load('res_x.npy')
         self.k_true.vector().set_local(nodal_vals)
         w, y, A, B, C = self._solver.forward(self.k_true)
         self.obs_data = self._solver.qoi_operator(w)
 
         # Setup DL error model
-        self._err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
-        #self._solver_r.set_dl_model(self._err_model)
+        #  self._err_model = load_parametric_model_avg('elu', Adam, 
+            #0.0003, 5, 58, 200, 2000, V.dim())
+        self._err_model = load_bn_model(randobs)
 
         # Initialize reduced order model
-        self.phi = np.loadtxt('../data/basis_five_param.txt',delimiter=",")
-        self._solver_r = AffineROMFin(self._V, self._err_model, self.phi)
-        #  self._solver_r.set_reduced_basis(self.phi)
+        self.phi = np.loadtxt('../data/basis_nine_param.txt',delimiter=",")
+        self._solver_r = AffineROMFin(self._V, self._err_model, self.phi, randobs)
         self._solver_r.set_data(self.obs_data)
 
 
@@ -159,11 +160,13 @@ class SqErrorOpROMML(theano.Op):
         return [output_gradients[0] * grad] 
 
 resolution = 40
+randobs = True
+
 V = get_space(resolution)
 chol = make_cov_chol(V, length=1.2)
-sq_err = SqErrorOpFOM(V, chol)
-sq_err_r = SqErrorOpROM(V, chol)
-sq_err_romml = SqErrorOpROMML(V, chol)
+sq_err = SqErrorOpFOM(V, chol, randobs)
+sq_err_r = SqErrorOpROM(V, chol, randobs)
+sq_err_romml = SqErrorOpROMML(V, chol, randobs)
 
 norm = np.random.randn(len(chol))
 nodal_vals = np.exp(0.5 * chol.T @ norm)
