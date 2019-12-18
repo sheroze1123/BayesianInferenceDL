@@ -16,7 +16,7 @@ from tensorflow.keras.callbacks import LearningRateScheduler
 
 from deep_learning.generate_fin_dataset import gen_affine_avg_rom_dataset
 
-def load_dataset_avg_rom(load_prev=True, tr_size=4000, v_size=200, genrand=False):
+def load_dataset_avg_rom(load_prev=True, tr_size=6000, v_size=200, genrand=False):
     '''
     Load dataset where the conductivity is parametrized as a FEniCS function
     and the QoI is the averaged temperature per subfin
@@ -209,8 +209,8 @@ def load_bn_model():
     model.load_weights('../data/keras_model_res_bn_random_e_3')
     return model
 
-#  '''
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(True, genrand=True)
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
+'''
 model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
 model.summary()
 #  model.load_weights('../data/keras_model_res_bn_random_e_3')
@@ -230,4 +230,4 @@ plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
 plt.xlabel("Epoch", fontsize=10)
 plt.ylabel("Absolute percentage error", fontsize=10)
 plt.savefig('bn_err.png', dpi=200)
-#  '''
+'''
