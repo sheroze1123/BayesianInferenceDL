@@ -15,9 +15,9 @@ import dolfin as dl; dl.set_log_level(40)
 
 # PyMC related imports
 import pymc3 as pm
+import theano
 from theano.compile.ops import as_op
 import theano.tensor as tt
-import theano
 
 # ROMML imports
 from fom.forward_solve import Fin
@@ -107,8 +107,8 @@ class SqErrorOpROM(theano.Op):
     otypes = [tt.dscalar, tt.dvector]
     __props__ = ()
 
-    def __init__(self, V, chol):
-        self._error_op = SqError(V, chol)
+    def __init__(self, V, chol, randobs):
+        self._error_op = SqError(V, chol, randobs)
 
     def perform(self, node, inputs, outputs):
         pred_k = inputs[0]
@@ -128,8 +128,8 @@ class SqErrorOpFOM(theano.Op):
     otypes = [tt.dscalar, tt.dvector]
     __props__ = ()
 
-    def __init__(self, V, chol):
-        self._error_op = SqError(V, chol)
+    def __init__(self, V, chol, randobs):
+        self._error_op = SqError(V, chol, randobs)
 
     def perform(self, node, inputs, outputs):
         pred_k = inputs[0]
@@ -149,8 +149,8 @@ class SqErrorOpROMML(theano.Op):
     otypes = [tt.dscalar, tt.dvector]
     __props__ = ()
 
-    def __init__(self, V, chol):
-        self._error_op = SqError(V, chol)
+    def __init__(self, V, chol, randobs):
+        self._error_op = SqError(V, chol, randobs)
 
     def perform(self, node, inputs, outputs):
         pred_k = inputs[0]
@@ -196,7 +196,7 @@ with pm.Model() as misfit_model:
     # TODO: Missing constant term here?
     y = pm.Potential('y', sq_err_romml(nodal_vals)[0] / sigma / sigma
             + num_pts * tt.log(sigma))
-    trace = pm.sample(1000, tune=500)
+    trace = pm.sample(1000, tune=500, njobs=1)
 
 #  pm.plot_posterior(trace)
 #  plt.show()
