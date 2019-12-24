@@ -1,14 +1,17 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+# Tensorflow related imports
+from tensorflow.keras.optimizers import Adam
+
 import sys
 sys.path.append('../')
 
-import matplotlib; matplotlib.use('macosx')
+import matplotlib; matplotlib.use('agg')
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dl; dl.set_log_level(40)
-
-# Tensorflow related imports
-from tensorflow.keras.optimizers import Adam
 
 # PyMC related imports
 import pymc3 as pm
