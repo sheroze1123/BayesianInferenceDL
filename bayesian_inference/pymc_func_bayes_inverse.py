@@ -43,10 +43,14 @@ class SqError:
 
         # Setup synthetic observations
         self.k_true = dl.Function(self._V)
+
+        # Random Gaussian field as true function
         #  norm = np.random.randn(len(chol))
         #  nodal_vals = np.exp(0.5 * chol.T @ norm)
+
         nodal_vals = np.load('res_x.npy')
         self.k_true.vector().set_local(nodal_vals)
+        
         w, y, A, B, C = self._solver.forward(self.k_true)
         self.obs_data = self._solver.qoi_operator(w)
 
@@ -168,43 +172,56 @@ randobs = True
 V = get_space(resolution)
 chol = make_cov_chol(V, length=1.2)
 sq_err = SqErrorOpFOM(V, chol, randobs)
-sq_err_r = SqErrorOpROM(V, chol, randobs)
-sq_err_romml = SqErrorOpROMML(V, chol, randobs)
-
-norm = np.random.randn(len(chol))
-nodal_vals = np.exp(0.5 * chol.T @ norm)
-
-sq_err_romml._error_op.err_grad_ROMML(nodal_vals)
-
-# Start chain with random Gaussian field parameter
-norm = np.random.randn(len(chol))
-nodal_vals_start = np.exp(0.5 * chol.T @ norm)
+#  sq_err_r = SqErrorOpROM(V, chol, randobs)
+#  sq_err_romml = SqErrorOpROMML(V, chol, randobs)
 
 Wdofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))
 V0_dofs = V.dofmap().dofs()
 points = Wdofs_x[V0_dofs, :] 
 num_pts = len(points)
-sigma = 1e-3
+sigma = 1e-4
 
-with pm.Model() as misfit_model:
+# Start at MAP point
+mcmc_start = np.load("res_FOM.npy")
+#  norm = np.random.randn(len(chol))
+#  mcmc_start = np.exp(0.5 * chol.T @ norm)
+#  init_cost, grad = sq_err._error_op.err_grad_FOM(mcmc_start)
+#  print(f"Initial_cost: {init_cost}, initial gradient norm: {np.linalg.norm(grad)}")
+
+misfit_model = pm.Model()
+
+with misfit_model:
 
     # Prior 
+    # TODO: Operator inverse as prior covariance
     ls = 1.2
     cov = pm.gp.cov.Matern52(2, ls=ls)
     nodal_vals = pm.gp.Latent(cov_func=cov).prior('nodal_vals', X=points)
 
-    # TODO: Missing constant term here?
-    y = pm.Potential('y', sq_err_romml(nodal_vals)[0] / sigma / sigma
-            + num_pts * tt.log(sigma))
-    trace = pm.sample(1000, tune=500, njobs=1)
+    y = pm.Potential('y', sq_err(nodal_vals)[0] / sigma / sigma)
+
+    #TODO: Good NUTS hyperparameters
+    #  trace = pm.sample(1000, tune=500, cores=None, start={'nodal_vals':mcmc_start})
+    #  trace = pm.sample(1000, tune=500, cores=None)
 
 #  pm.plot_posterior(trace)
 #  plt.show()
 #  pm.traceplot(trace)
 
+import pdb; pdb.set_trace()
 k_inv = dl.Function(V)
 k_inv.vector().set_local(np.mean(trace['nodal_vals'],0))
 dl.plot(k_inv)
 plt.savefig("k_inv.png")
-dl.plot(sq_err_r._error_op.k_true)
+
+k_inv_s = dl.Function(V)
+k_inv_s.vector().set_local(np.std(trace['nodal_vals'],0))
+dl.plot(k_inv_s)
+plt.savefig("k_inv_std.png")
+
+nodal_vals = np.load('res_x.npy')
+
+k_true = dl.Function(V)
+k_true.vector().set_local(nodal_vals)
+dl.plot(k_true)
 plt.savefig("k_true.png")
