@@ -44,20 +44,20 @@ z_true = dl.Function(V)
 #  nodal_vals = np.exp(0.5 * chol.T @ norm)
 
 #Load random Gaussian field
-#  nodal_vals = np.load('res_x.npy')
-#  z_true.vector().set_local(nodal_vals)
-#  vmax = np.max(nodal_vals)
-#  vmin = np.min(nodal_vals)
+nodal_vals = np.load('res_x.npy')
+z_true.vector().set_local(nodal_vals)
+vmax = np.max(nodal_vals)
+vmin = np.min(nodal_vals)
 
 #  z_true = dl.interpolate(dl.Expression('0.3 + 0.01 * x[0] * x[1] + 0.05 * (sin(2*x[1])*cos(2*x[0]) + 1.5)', degree=2),V)
 #  vmax = 0.7
 #  vmin = 0.3
 
 #Piece-wise constant field
-z_true = solver.nine_param_to_function([1.1, 1.11, 1.13, 1.12, 1.117, 1.1, 1.127, 1.118, 1.114])
-np.save('z_tr_pw', z_true.vector()[:])
-vmax = 1.130
-vmin = 1.095
+#z_true = solver.nine_param_to_function([1.1, 1.11, 1.13, 1.12, 1.117, 1.1, 1.127, 1.118, 1.114])
+#np.save('z_tr_pw', z_true.vector()[:])
+#vmax = 1.130
+#vmin = 1.095
 
 
 w, y, A, B, C = solver.forward(z_true)
@@ -146,9 +146,9 @@ class RSolverWrapper:
         self.grad = self.grad + dl.assemble(self.solver.grad_reg)
         return self.grad
 
-solver_w = RSolverWrapper(err_model, solver_r, solver)
+#  solver_w = RSolverWrapper(err_model, solver_r, solver)
 #  solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
-#  solver_w = SolverWrapper(solver, obs_data)
+solver_w = SolverWrapper(solver, obs_data)
 
 bounds = Bounds(0.95 * vmin, 1.05 * vmax)
 #  bounds = Bounds(0.3, 0.7)
@@ -164,7 +164,7 @@ print(f'Minimum cost: {res.fun:.3F}')
 ####################3
 
 z.vector().set_local(res.x)
-np.save('res_ROM', res.x)
+np.save('res_FOM', res.x)
 w,y, _, _, _ = solver.forward(z)
 pred_obs = solver.qoi_operator(w)
 obs_err = np.linalg.norm(obs_data - pred_obs)

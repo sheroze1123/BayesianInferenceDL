@@ -241,9 +241,10 @@ class Fin:
 
     def gradient(self, k, data):
 
+        # TODO: Exponential parametrization of conductivity?
         if (np.allclose((np.linalg.norm(k.vector()[:])), 0.0)):
             print("parameter vector norm close to zero!")
-            return 100 * np.ones(k.vector()[:].shape)
+            return np.zeros(k.vector()[:].shape)
 
         z = Function(self.V)
 

@@ -203,14 +203,20 @@ def lr_schedule_pre(epoch):
     else:
         return 5e-7
 
-def load_bn_model():
-    model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, 40)
-    model.summary()
-    model.load_weights('../data/keras_model_res_bn_random_e_3')
-    return model
+def load_bn_model(randobs=True):
+    if randobs:
+        model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, 40)
+        model.summary()
+        model.load_weights('../data/keras_model_res_bn_random_e_3')
+        return model
+    else:
+        model = res_bn_fc_model(ELU(), Adam, 3e-4, 5, 50, 1446)
+        model.summary()
+        model.load_weights('../data/keras_model_res_bn')
+        return model
 
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
 '''
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
 model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
 model.summary()
 #  model.load_weights('../data/keras_model_res_bn_random_e_3')
