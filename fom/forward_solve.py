@@ -261,7 +261,12 @@ class Fin:
 
         k_hat = TestFunction(self.V)
         grad_w_form = k_hat * inner(grad(z), grad(v)) * self.dx(0)
-        return assemble(grad_w_form)[:]
+        grad_vec = assemble(grad_w_form)[:]
+
+        if np.allclose(np.linalg.norm(grad_vec), 0.0):
+            print("Gradient norm is zero!")
+
+        return grad_vec
 
     def averaging_operator(self):
         '''
