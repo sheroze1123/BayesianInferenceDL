@@ -15,7 +15,7 @@ from tensorflow.keras.optimizers import Adam
 from scipy.optimize import minimize, Bounds
 
 # ROMML imports
-from fom.forward_solve import Fin
+from fom.forward_solve_exp import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin 
 from deep_learning.dl_model import load_parametric_model_avg, load_bn_model
@@ -45,6 +45,10 @@ z_true = dl.Function(V)
 
 #Load random Gaussian field
 nodal_vals = np.load('res_x.npy')
+
+# For exp parametrization
+nodal_vals = np.log(nodal_vals)
+
 z_true.vector().set_local(nodal_vals)
 vmax = np.max(nodal_vals)
 vmin = np.min(nodal_vals)
@@ -68,7 +72,8 @@ z = dl.Function(V)
 #  z = dl.interpolate(dl.Expression('0.3 + 0.01 * x[0] * x[1]', degree=2),V)
 #  z_0_nodal_vals = z.vector()[:]
 norm = np.random.randn(len(chol))
-z_0_nodal_vals = np.exp(0.5 * chol.T @ norm)
+#  z_0_nodal_vals = np.exp(0.5 * chol.T @ norm)
+z_0_nodal_vals = 0.5 * chol.T @ norm #For exp parametrization
 z.vector().set_local(z_0_nodal_vals)
 #  p = dl.plot(z)
 #  plt.colorbar(p)
@@ -174,6 +179,12 @@ print(f"Relative observation error: {obs_err/np.linalg.norm(obs_data)*100:.4f}%"
 p = dl.plot(z, vmax=vmax, vmin=vmin)
 plt.colorbar(p)
 plt.savefig("z_map.png", dpi=200)
+
+plt.cla()
+plt.clf()
+p = dl.plot(dl.exp(z))
+plt.colorbar(p)
+plt.savefig("z_map_exp.png", dpi=200)
 
 
 #  plt.cla()
