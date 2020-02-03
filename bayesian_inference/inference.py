@@ -7,9 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dl; dl.set_log_level(40)
 
-# Tensorflow related imports
-from tensorflow.keras.optimizers import Adam
-
 # PyMC related imports
 import pymc3 as pm
 import theano
@@ -124,17 +121,24 @@ with misfit_model:
 
 k_inv = dl.Function(V)
 k_inv.vector().set_local(np.mean(trace['nodal_vals'],0))
-dl.plot(k_inv)
+p = dl.plot(k_inv)
+plt.colorbar(p)
 plt.savefig("k_inv.png")
+plt.cla()
+plt.clf()
 
 k_inv_s = dl.Function(V)
 k_inv_s.vector().set_local(np.std(trace['nodal_vals'],0))
-dl.plot(k_inv_s)
+p = dl.plot(k_inv_s)
+plt.colorbar(p)
 plt.savefig("k_inv_std.png")
+plt.cla()
+plt.clf()
 
 nodal_vals = np.load('res_x.npy')
 
 k_true = dl.Function(V)
 k_true.vector().set_local(nodal_vals)
-dl.plot(k_true)
+p = dl.plot(k_true)
+plt.colorbar(p)
 plt.savefig("k_true.png")
