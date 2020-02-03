@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 
-import matplotlib; matplotlib.use('macosx')
+import matplotlib; matplotlib.use('agg')
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,9 +16,6 @@ import theano.tensor as tt
 # ROMML imports
 from fom.forward_solve_exp import Fin
 from fom.thermal_fin import get_space
-from rom.averaged_affine_ROM import AffineROMFin 
-from deep_learning.dl_model import load_parametric_model_avg, load_bn_model
-from gaussian_field import make_cov_chol
 
 class ParamToObsFOM(theano.Op):
     '''
@@ -109,11 +106,13 @@ with misfit_model:
 
     # Likelihood
     y = pm.distributions.multivariate.MvNormal('y',
-            mu=obs_data, cov=obs_covariance, observed=qoi)
+            mu=qoi, cov=obs_covariance, observed=obs_data)
 
     #TODO: Good NUTS hyperparameters
     #  trace = pm.sample(1000, tune=500, cores=None, start={'nodal_vals':mcmc_start})
-    trace = pm.sample(1000, tune=500, cores=None)
+    step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=6)
+    trace = pm.sample(500, tune=100, cores=None, step=step, start={'nodal_vals':mcmc_start})
+    #trace = pm.sample(500, tune=200, cores=None, start={'nodal_vals':mcmc_start}, max_treedepth=6, is_cov=True, scaling=M)
 
 #  pm.plot_posterior(trace)
 #  plt.show()
