@@ -109,14 +109,13 @@ with misfit_model:
             mu=qoi, cov=obs_covariance, observed=obs_data)
 
     #TODO: Good NUTS hyperparameters
-    #  trace = pm.sample(1000, tune=500, cores=None, start={'nodal_vals':mcmc_start})
     step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=6)
-    trace = pm.sample(500, tune=100, cores=None, step=step, start={'nodal_vals':mcmc_start})
-    #trace = pm.sample(500, tune=200, cores=None, start={'nodal_vals':mcmc_start}, max_treedepth=6, is_cov=True, scaling=M)
+    trace = pm.sample(900, tune=300, cores=None, step=step, start={'nodal_vals':mcmc_start})
 
 #  pm.plot_posterior(trace)
 #  plt.show()
 #  pm.traceplot(trace)
+pm.save_trace(trace)
 
 k_inv = dl.Function(V)
 k_inv.vector().set_local(np.mean(trace['nodal_vals'],0))
