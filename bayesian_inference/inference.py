@@ -80,16 +80,14 @@ obs_data = obs_data + np.random.randn(len(obs_data)) * measurement_sigma
 M = forward_op._solver.M
 
 # Stiffness matrix
-alpha = 1e-5
-cov_sigma = 0.01
+alpha = 1
+cov_sigma = 1000
 K = forward_op._solver.K
 A = np.linalg.inv(M) @ K + alpha * np.eye(num_pts)
 S, V_ = np.linalg.eig(A)
-V_ = V_.T
+V_ = V_.T #TODO!
 
-Cinv = cov_sigma * M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M #TODO: Verify V vs V.T
-prior_cov = Cinv
-
+prior_cov = (1/cov_sigma) * M @ V_ @ np.diag(np.square(S)) @ V_.T @ M #TODO: Verify V vs V.T
 mean = np.zeros(num_pts)
 
 sigma = measurement_sigma
