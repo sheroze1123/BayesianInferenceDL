@@ -60,6 +60,11 @@ randobs = True
 
 V = get_space(resolution)
 
+Wdofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))
+V0_dofs = V.dofmap().dofs()
+points = Wdofs_x[V0_dofs, :] 
+num_pts = len(points)
+
 k_true = dl.Function(V)
 nodal_vals = np.log(np.load('res_x.npy'))
 k_true.vector().set_local(nodal_vals)
@@ -75,22 +80,19 @@ obs_data = obs_data + np.random.randn(len(obs_data)) * measurement_sigma
 M = forward_op._solver.M
 
 # Stiffness matrix
+alpha = 1e-5
+cov_sigma = 0.01
 K = forward_op._solver.K
-A = np.linalg.inv(M) @ K + np.eye(M.shape[0])
+A = np.linalg.inv(M) @ K + alpha * np.eye(num_pts)
 S, V_ = np.linalg.eig(A)
+V_ = V_.T
 
-Wdofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))
-V0_dofs = V.dofmap().dofs()
-points = Wdofs_x[V0_dofs, :] 
-num_pts = len(points)
+Cinv = cov_sigma * M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M #TODO: Verify V vs V.T
+prior_cov = Cinv
 
-s = 1.2
-alpha = 0.1
-Cinv = alpha * M @ V_ @ np.diag(np.square(S)) @ V_.T @ M #TODO: Verify V vs V.T
-cov = Cinv
 mean = np.zeros(num_pts)
 
-sigma = 1e-2
+sigma = measurement_sigma
 obs_covariance = sigma * sigma * np.eye(forward_op._solver.n_obs)
 
 # Start at MAP point
@@ -98,12 +100,16 @@ mcmc_start = np.load("res_FOM.npy")
 #mcmc_start = np.zeros(num_pts)
 
 misfit_model = pm.Model()
+#  prior_realization = dl.Function(V)
+n_samps = 500
+n_tune = 100
+
 
 with misfit_model:
 
     # Prior 
     nodal_vals = pm.distributions.multivariate.MvNormal('nodal_vals', 
-            mu=mean, cov=cov, shape=(num_pts))
+            mu=mean, cov=prior_cov, shape=(num_pts))
 
     qoi = forward_op(nodal_vals)[0]
 
@@ -111,17 +117,46 @@ with misfit_model:
     y = pm.distributions.multivariate.MvNormal('y',
             mu=qoi, cov=obs_covariance, observed=obs_data)
 
+    prior_realization.vector().set_local(nodal_vals.random())
+    p = dl.plot(prior_realization)
+    plt.colorbar(p)
+    plt.savefig('random_realization.png')
+
     #TODO: Good NUTS hyperparameters
-    step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=6, target_accept=0.75)
-    trace = pm.sample(500, tune=100, cores=None, step=step, start={'nodal_vals':mcmc_start})
+    step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=7, target_accept=0.98)
+    trace = pm.sample(n_samps, tune=n_tune, cores=None, step=step, 
+            start={'nodal_vals':mcmc_start})
+    
+    #  trace = pm.load_trace('.pymc_3.trace')
 
 #  pm.plot_posterior(trace)
 #  plt.show()
 #  pm.traceplot(trace)
 pm.save_trace(trace)
 
+#  trace_len = 500
+#  k_trace = dl.Function(V)
+#  misfits = np.zeros(trace_len)
+#  for i in range(trace_len):
+    #  n_vals = trace['nodal_vals'][i,:]
+    #  k_trace.vector().set_local(n_vals)
+    #  w, _, _, _, _ = forward_op._solver.forward(k_trace)
+    #  pred_trace = forward_op._solver.qoi_operator(w)
+    #  misfit_trace = 0.5 * np.linalg.norm(obs_data - pred_trace)**2
+    #  misfits[i] = misfit_trace
+
+#  plt.plot(misfits)
+#  plt.xlabel('Trace index')
+#  plt.ylabel('Misfit functional')
+#  plt.savefig('misfit_trace.png')
+#  plt.cla()
+#  plt.clf()
+
+
+#  import pdb; pdb.set_trace()
+
 k_inv = dl.Function(V)
-k_inv.vector().set_local(np.mean(trace['nodal_vals'],0))
+k_inv.vector().set_local(np.mean(trace['nodal_vals'][:n_samps,:],0))
 p = dl.plot(k_inv)
 plt.colorbar(p)
 plt.savefig("k_inv.png")

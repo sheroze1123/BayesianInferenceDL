@@ -281,7 +281,7 @@ class Fin:
         z = Function(self.V)
 
         self._k.assign(k)
-        solve(self._F == self._a, z) 
+        solve(self._F == self._a, z)
         pred_obs = np.dot(self.B_obs, z.vector()[:])
 
         adj_RHS = -self.B_obs.T
@@ -299,6 +299,34 @@ class Fin:
         grad_vec = np.dot(assemble(grad_w_form).array(), v_nodal_vals)
 
         return grad_vec.T
+
+    #  def hessian(self, k):
+
+        #  self._k.assign(k)
+        #  solve(self._F == self._a, z) 
+        #  pred_obs = np.dot(self.B_obs, z.vector()[:])
+
+        #  adj_RHS = -np.dot((pred_obs - data).T, self.B_obs)
+        #  assemble(self._adj_F, tensor=self.A_adj)
+        #  v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
+
+        #  v = Function(self.V)
+        #  v.vector().set_local(v_nodal_vals)
+
+        #  # second-order forward
+        #  w_tilde = TrialFunction(self.V)
+        #  v_tilde = TestFunction(self.V)
+
+        #  self._F = inner(exp(self._k) * grad(self.w), grad(self.v)) * self.dx(0) + \
+            #  self.v * self.Bi * self.w * self.ds(1)
+        #  self._a = self.v * self.ds(2)
+
+        #  incr_F = exp(self._k) * inner(grad(w_tilde), grad(v_tilde)) * self.dx(0) +
+            #  v_tilde * self.Bi * w_tilde * self.ds(1)
+        #  incr_a = #TODO: Read RHMC paper to get Gauss-Newton Hessian
+
+
+
 
     def averaging_operator(self):
         '''
