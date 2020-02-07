@@ -68,6 +68,8 @@ forward_op = ParamToObsFOM(V, randobs)
 
 w, _, _, _, _ = forward_op._solver.forward(k_true)
 obs_data = forward_op._solver.qoi_operator(w)
+measurement_sigma = 0.01
+obs_data = obs_data + np.random.randn(len(obs_data)) * measurement_sigma
 
 # Mass matrix
 M = forward_op._solver.M
@@ -93,6 +95,7 @@ obs_covariance = sigma * sigma * np.eye(forward_op._solver.n_obs)
 
 # Start at MAP point
 mcmc_start = np.load("res_FOM.npy")
+#mcmc_start = np.zeros(num_pts)
 
 misfit_model = pm.Model()
 
@@ -109,8 +112,8 @@ with misfit_model:
             mu=qoi, cov=obs_covariance, observed=obs_data)
 
     #TODO: Good NUTS hyperparameters
-    step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=6)
-    trace = pm.sample(900, tune=300, cores=None, step=step, start={'nodal_vals':mcmc_start})
+    step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=6, target_accept=0.75)
+    trace = pm.sample(500, tune=100, cores=None, step=step, start={'nodal_vals':mcmc_start})
 
 #  pm.plot_posterior(trace)
 #  plt.show()
