@@ -95,6 +95,9 @@ obs_covariance = sigma * sigma * np.eye(forward_op._solver.n_obs)
 
 # Start at MAP point
 mcmc_start = np.load("res_FOM.npy")
+
+#TODO: ROM HESSIAN
+
 #mcmc_start = np.zeros(num_pts)
 
 misfit_model = pm.Model()
@@ -115,22 +118,22 @@ with misfit_model:
     y = pm.distributions.multivariate.MvNormal('y',
             mu=qoi, cov=obs_covariance, observed=obs_data)
 
-    prior_realization.vector().set_local(nodal_vals.random())
-    p = dl.plot(prior_realization)
-    plt.colorbar(p)
-    plt.savefig('random_realization.png')
+    #  prior_realization.vector().set_local(nodal_vals.random())
+    #  p = dl.plot(prior_realization)
+    #  plt.colorbar(p)
+    #  plt.savefig('random_realization.png')
 
     #TODO: Good NUTS hyperparameters
     step = pm.NUTS(is_cov=True, scaling=M, max_treedepth=7, target_accept=0.98)
     trace = pm.sample(n_samps, tune=n_tune, cores=None, step=step, 
             start={'nodal_vals':mcmc_start})
     
-    #  trace = pm.load_trace('.pymc_3.trace')
+    #  trace = pm.load_trace('.pymc_4.trace')
 
 #  pm.plot_posterior(trace)
 #  plt.show()
 #  pm.traceplot(trace)
-pm.save_trace(trace)
+#  pm.save_trace(trace)
 
 #  trace_len = 500
 #  k_trace = dl.Function(V)
