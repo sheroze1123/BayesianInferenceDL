@@ -239,6 +239,9 @@ class Fin:
                 * self.dx(0) + self.u_tilde * self.u_sq * exp(self._k) * \
                 inner(grad(self.z), grad(self.lam)) * self.dx(0)
 
+        self.Fisher_Inf_action = self.u_tilde * exp(self._k) * \
+                inner(grad(self.z), grad(self.lam_sq)) * self.dx(0)
+
         self.A_incr_adj = PETScMatrix()
         # Randomly sampling state vector for inverse problems
         #  self.n_samples = 3
@@ -352,6 +355,32 @@ class Fin:
         self.lam_sq.vector().set_local(l_sq_np)
 
         return assemble(self.hessian_action_form)[:]
+
+    def GN_hessian_action(self, k, u_2, data):
+        '''
+        Computes the Gauss-Newton Hessian (w.r.t. objective function) action 
+        given a second variation u_2
+        and a parameter location k
+        '''
+
+        self._k.assign(k)
+        solve(self._F == self._a, self.z) 
+        pred_obs = np.dot(self.B_obs, self.z.vector()[:])
+
+        adj_RHS = -np.dot((pred_obs - data).T, self.B_obs)
+        assemble(self._adj_F, tensor=self.A_adj)
+        lam_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
+        self.lam.vector().set_local(lam_nodal_vals)
+
+        self.u_sq.assign(u_2)
+        solve(self.incr_F == self.incr_a, self.w_sq_f)
+        assemble(self.incr_F_adj, tensor=self.A_incr_adj)
+        b_incr_adj_RHS = assemble(self.incr_a_adj)
+        l_sq_np = np.linalg.solve(self.A_incr_adj.array(), \
+                -np.dot(np.dot(self.B_obs, self.w_sq_f.vector()[:]).T, self.B_obs))
+        self.lam_sq.vector().set_local(l_sq_np)
+
+        return assemble(self.Fisher_Inf_action)[:]
 
     def averaging_operator(self):
         '''
