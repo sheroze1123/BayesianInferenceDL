@@ -83,18 +83,13 @@ M = forward_op._solver.M
 # Stiffness matrix
 K = forward_op._solver.K
 
-#  alpha = 1
-#  cov_sigma = 1000000000
-#  A = np.linalg.inv(M) @ K + alpha * np.eye(num_pts)
-#  S, V_ = np.linalg.eig(A)
-#  prior_cov = (1/cov_sigma) * M @ V_ @ np.diag(np.square(S)) @ V_.T @ M 
-#  inv_prior_cov = cov_sigma * M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M
-
 d_p = 1
 g_p = 0.0001
+
+# Discretized elliptic operator representing inv. sq. root of covariance
 A = g_p * np.linalg.inv(M) @ K + d_p * np.eye(num_pts)
 S, V_ = np.linalg.eig(A)
-inv_prior_cov = M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M
+#  inv_prior_cov = M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M
 prior_cov = M @ V_ @ np.diag(np.square(S)) @ V_.T @ M 
 
 mean = np.zeros(num_pts)
@@ -104,10 +99,6 @@ obs_covariance = sigma * sigma * np.eye(forward_op._solver.n_obs)
 
 # Start at MAP point
 mcmc_start = np.load("res_FOM.npy")
-
-#TODO: ROM HESSIAN
-
-#mcmc_start = np.zeros(num_pts)
 
 S_diag = np.diag(S)
 V_LAM = np.dot(V_, S_diag)
@@ -122,8 +113,7 @@ def H_tilde_action(x):
     V_LAM_x = np.dot(V_LAM, x)
     u_2.vector().set_local(V_LAM_x)
     H_V_LAM_x = forward_op._solver.GN_hessian_action(k_MAP, u_2, obs_data)
-    return g_p * np.dot(V_LAM.T, H_V_LAM_x)
-
+    return np.dot(V_LAM.T, H_V_LAM_x)
 
 r_samps = 70 # is equal to desired rank + oversampling factor
 Y = np.zeros((1446, r_samps))
@@ -145,11 +135,11 @@ V_r = Q @ V_Ts
 
 D = np.diag(np.divide(SIG_Ts, SIG_Ts+1))
 WB_INT = np.eye(1446) - (V_r @ D @ V_r.T)
-G_INV = g_p * V_ @ S_diag @ WB_INT @ S_diag @ np.linalg.inv(V_)
+G_INV = V_ @ S_diag @ WB_INT @ S_diag @ np.linalg.inv(V_)
 
 misfit_model = pm.Model()
 prior_realization = dl.Function(V)
-n_samps = 500
+n_samps = 400
 n_tune = 100
 
 with misfit_model:
@@ -157,8 +147,6 @@ with misfit_model:
     # Prior 
     nodal_vals = pm.distributions.multivariate.MvNormal('nodal_vals', 
             mu=mean, cov=prior_cov, shape=(num_pts))
-    #  nodal_vals = pm.distributions.multivariate.MvNormal('nodal_vals', 
-            #  mu=mean, tau=inv_prior_cov, shape=(num_pts))
 
     qoi = forward_op(nodal_vals)[0]
 
@@ -175,7 +163,7 @@ with misfit_model:
     step = pm.NUTS(scaling=G_INV, max_treedepth=7, target_accept=0.98)
     trace = pm.sample(n_samps, tune=n_tune, cores=None, step=step, 
             start={'nodal_vals':mcmc_start})
-    #  trace = pm.load_trace('.pymc_2.trace')
+    #  trace = pm.load_trace('.pymc_7.trace')
     pm.save_trace(trace)
 
 #  pm.plot_posterior(trace)
@@ -200,18 +188,15 @@ plt.savefig('misfit_trace.png')
 plt.cla()
 plt.clf()
 
-plt.plot(trace['nodal_vals'][:trace_len,1])
-plt.plot(trace['nodal_vals'][:trace_len,1445])
-plt.plot(trace['nodal_vals'][:trace_len,145])
-plt.plot(trace['nodal_vals'][:trace_len,5])
+plt.plot(trace['nodal_vals'][trace_len,1])
+#  plt.plot(trace['nodal_vals'][:trace_len,1445])
+#  plt.plot(trace['nodal_vals'][:trace_len,145])
+#  plt.plot(trace['nodal_vals'][:trace_len,5])
 plt.savefig('trace_samples.png')
 plt.cla()
 
-
-#  import pdb; pdb.set_trace()
-
 k_inv = dl.Function(V)
-k_inv.vector().set_local(np.mean(trace['nodal_vals'][:n_samps,:],0))
+k_inv.vector().set_local(np.mean(trace['nodal_vals'][n_samps,:],0))
 p = dl.plot(k_inv)
 plt.colorbar(p)
 plt.savefig("k_inv.png")
@@ -219,7 +204,7 @@ plt.cla()
 plt.clf()
 
 k_inv_s = dl.Function(V)
-k_inv_s.vector().set_local(np.std(trace['nodal_vals'],0))
+k_inv_s.vector().set_local(np.std(trace['nodal_vals'][n_samps,:],0))
 p = dl.plot(k_inv_s)
 plt.colorbar(p)
 plt.savefig("k_inv_std.png")
