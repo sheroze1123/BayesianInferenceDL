@@ -19,13 +19,12 @@ from fom.forward_solve_exp import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin 
 from deep_learning.dl_model import load_parametric_model_avg, load_bn_model
-from gaussian_field import make_cov_chol
 
 randobs = True
 
 resolution = 40
 V = get_space(resolution)
-chol = make_cov_chol(V, length=1.2)
+#  chol = make_cov_chol(V, length=1.2)
 
 # Setup DL error model
 #  err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
@@ -38,10 +37,6 @@ solver_r = AffineROMFin(V, err_model, phi, randobs)
 # Setup synthetic observations
 solver = Fin(V, randobs)
 z_true = dl.Function(V)
-
-#Generate random Gaussian field
-#  norm = np.random.randn(len(chol))
-#  nodal_vals = np.exp(0.5 * chol.T @ norm)
 
 #Load random Gaussian field
 nodal_vals = np.load('res_x.npy')
@@ -63,7 +58,6 @@ vmin = np.min(nodal_vals)
 #vmax = 1.130
 #vmin = 1.095
 
-
 w, y, A, B, C = solver.forward(z_true)
 obs_data = solver.qoi_operator(w)
 solver_r.set_data(obs_data)
@@ -71,32 +65,37 @@ solver_r.set_data(obs_data)
 z = dl.Function(V)
 #  z = dl.interpolate(dl.Expression('0.3 + 0.01 * x[0] * x[1]', degree=2),V)
 #  z_0_nodal_vals = z.vector()[:]
-norm = np.random.randn(len(chol))
-#  z_0_nodal_vals = np.exp(0.5 * chol.T @ norm)
-z_0_nodal_vals = 0.5 * chol.T @ norm #For exp parametrization
+
+prior_covariance = np.load('prior_covariance.npy')
+L = np.linalg.cholesky(prior_covariance)
+draw = np.load('uncorr_draw.npy')
+z_0_nodal_vals = np.dot(L, draw) #For exp parametrization
 z.vector().set_local(z_0_nodal_vals)
-#  p = dl.plot(z)
-#  plt.colorbar(p)
-#  plt.savefig('z_0.png')
-#  plt.cla()
-#  plt.clf()
+
 
 class SolverWrapper:
     def __init__(self, solver, data): 
         self.solver = solver
         self.data = data
         self.z = dl.Function(V)
+        self.fwd_time = 0.0
+        self.grad_time = 0.0
 
     def cost_function(self, z_v):
         self.z.vector().set_local(z_v)
+        t_i = time.time()
         w, y, A, B, C = self.solver.forward(self.z)
         y = self.solver.qoi_operator(w)
+        self.fwd_time += (time.time() - t_i)
         cost = 0.5 * np.linalg.norm(y - self.data)**2 + dl.assemble(self.solver.reg)
         return cost
 
     def gradient(self, z_v):
         self.z.vector().set_local(z_v)
-        grad = self.solver.gradient(self.z, self.data) + dl.assemble(self.solver.grad_reg)[:]
+        t_i = time.time()
+        grad = self.solver.gradient(self.z, self.data)
+        self.grad_time += (time.time() - t_i)
+        grad += dl.assemble(self.solver.grad_reg)[:]
         return grad
 
 class ROMMLSolverWrapper:
@@ -108,12 +107,20 @@ class ROMMLSolverWrapper:
         self.data = self.solver_r.data
         self.cost = None
         self.grad = None
+        self.fwd_time_dl = 0.0
+        self.fwd_time_rom = 0.0
+        self.grad_time = 0.0
+        self.grad_time_dl = 0.0
 
     def cost_function(self, z_v):
         self.z.vector().set_local(z_v)
+        t_i = time.time()
         w_r = self.solver_r.forward_reduced(self.z)
         y_r = self.solver_r.qoi_reduced(w_r)
+        self.fwd_time_rom += (time.time() - t_i)
+        t_i = time.time()
         e_NN = self.err_model.predict([[z_v]])[0]
+        self.fwd_time_dl += (time.time() - t_i)
         self.solver._k.assign(self.z)
         y_romml = y_r + e_NN
         self.cost = 0.5 * np.linalg.norm(y_romml - self.data)**2 + dl.assemble(self.solver.reg)
@@ -124,6 +131,8 @@ class ROMMLSolverWrapper:
         self.solver._k.assign(self.z)
         self.grad, self.cost = self.solver_r.grad_romml(self.z)
         self.grad = self.grad + dl.assemble(self.solver.grad_reg)
+        self.grad_time = solver_r.romml_grad_time
+        self.grad_time_dl = solver_r.romml_grad_time_dl
         return self.grad
 
 class RSolverWrapper:
@@ -135,25 +144,30 @@ class RSolverWrapper:
         self.data = self.solver_r.data
         self.cost = None
         self.grad = None
+        self.time = 0.0
 
     def cost_function(self, z_v):
         self.z.vector().set_local(z_v)
+        t_i = time.time()
         w_r = self.solver_r.forward_reduced(self.z)
         y_r = self.solver_r.qoi_reduced(w_r)
         self.solver._k.assign(self.z)
         self.cost = 0.5 * np.linalg.norm(y_r - self.data)**2 + dl.assemble(self.solver.reg)
+        self.time += (time.time() - t_i)
         return self.cost
 
     def gradient(self, z_v):
         self.z.vector().set_local(z_v)
+        t_i = time.time()
         self.solver._k.assign(self.z)
         self.grad, self.cost = self.solver_r.grad_reduced(self.z)
         self.grad = self.grad + dl.assemble(self.solver.grad_reg)
+        self.time += (time.time() - t_i)
         return self.grad
 
 #  solver_w = RSolverWrapper(err_model, solver_r, solver)
-#  solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
-solver_w = SolverWrapper(solver, obs_data)
+solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
+#  solver_w = SolverWrapper(solver, obs_data)
 
 bounds = Bounds(0.95 * vmin, 1.05 * vmax)
 #  bounds = Bounds(0.3, 0.7)
@@ -165,11 +179,15 @@ res = minimize(solver_w.cost_function, z_0_nodal_vals,
 
 print(f'status: {res.success}, message: {res.message}, n_it: {res.nit}')
 print(f'Minimum cost: {res.fun:.3F}')
+print(f'Running time (fwd ROM): {solver_w.fwd_time_rom} seconds')
+print(f'Running time (fwd DL): {solver_w.fwd_time_dl} seconds')
+print(f'Running time (grad): {solver_w.grad_time} seconds')
+print(f'Running time (grad): {solver_w.grad_time_dl} seconds')
 
 ####################3
 
 z.vector().set_local(res.x)
-np.save('res_FOM', res.x)
+np.save('res_ROMML', res.x)
 w,y, _, _, _ = solver.forward(z)
 pred_obs = solver.qoi_operator(w)
 obs_err = np.linalg.norm(obs_data - pred_obs)

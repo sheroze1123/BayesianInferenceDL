@@ -61,6 +61,9 @@ class AffineROMFin:
         Arguments:
             V - dolfin FunctionSpace
         '''
+        self.rom_grad_time = 0.0
+        self.romml_grad_time = 0.0
+        self.romml_grad_time_dl = 0.0
 
         self.num_params = 9
 
@@ -228,6 +231,7 @@ class AffineROMFin:
             #  self.dA_dsigmak_phi[i, :, :] = np.dot(self.dA_dsigmak[i], self.phi)
 
         self.NN_grad_val = None
+        self.session = get_session()
 
     def forward(self, k):
         '''
@@ -312,58 +316,66 @@ class AffineROMFin:
         return np.dot(self.B_obs_phi, w_r)
 
     def grad_reduced(self, k):
+        t_i = time.time()
         w_r = self.forward_reduced(k)
         reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
-
         reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
+        self.rom_grad_time += (time.time() - t_i)
 
         A_r = self._A_r.getDenseArray()
-        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
-
         psi = self.psi_p.getDenseArray()
+
+        t_i = time.time()
+        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
         psi_v_r = np.dot(psi, v_r)
 
         A_phi_w_r = np.dot(self.dA_dsigmak_phi, w_r).T
         dROM_dk = np.dot(A_phi_w_r, self.dsigma_dk)
         dJ_dk = np.dot(psi_v_r.T, dROM_dk)
+        self.rom_grad_time += (time.time() - t_i)
 
         J = 0.5 * np.linalg.norm(self.data - reduced_fwd_obs)**2
 
         return dJ_dk, J
 
     def grad_romml(self, k):
+        t_i = time.time()
         w_r = self.forward_reduced(k)
         e_NN = self.dl_model.predict([[k.vector()[:]]])[0]
 
         reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
         romml_fwd_obs = reduced_fwd_obs + e_NN
-
         reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - romml_fwd_obs)
 
-        A_r = self._A_r.getDenseArray()
-        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
+        self.romml_grad_time += (time.time() - t_i)
 
+        A_r = self._A_r.getDenseArray()
         psi = self.psi_p.getDenseArray()
+
+        t_i = time.time()
+        v_r = np.linalg.solve(A_r.T, reduced_adj_rhs)
         psi_v_r = np.dot(psi, v_r)
 
         A_phi_w_r = np.dot(self.dA_dsigmak_phi, w_r).T
         dROM_dk = np.dot(A_phi_w_r, self.dsigma_dk)
         f_x_dp_x = np.dot(psi_v_r.T, dROM_dk)
+        self.romml_grad_time += (time.time() - t_i)
 
         x_inp = [k.vector()[:]]
-        session = get_session()
-        f_eps_dp_eps = session.run(self.NN_grad, 
+        t_i = time.time()
+        f_eps_dp_eps = self.session.run(self.NN_grad, 
                 feed_dict={self.dl_model.input: x_inp,
                            self.reduced_fwd_obs: reduced_fwd_obs,
                            self.data_ph: self.data})[0]
 
-        loss = session.run(self.loss,
+        self.NN_grad_val = f_eps_dp_eps.reshape(f_eps_dp_eps.size)
+        self.romml_grad_time_dl += (time.time() - t_i
+        grad =  f_x_dp_x + self.NN_grad_val
+
+        loss = self.session.run(self.loss,
                 feed_dict={self.dl_model.input: x_inp,
                            self.reduced_fwd_obs: reduced_fwd_obs,
                            self.data_ph: self.data})
-
-        self.NN_grad_val = f_eps_dp_eps.reshape(f_eps_dp_eps.size)
-        grad =  f_x_dp_x + self.NN_grad_val
         return grad, loss
 
     def set_data(self, data):

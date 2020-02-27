@@ -26,16 +26,16 @@ def load_dataset_avg_rom(load_prev=True, tr_size=6000, v_size=200, genrand=False
         errors_train =  np.loadtxt('../data/errors_aff_avg_tr.txt', delimiter=',')
     else:
         (z_train, errors_train) = gen_affine_avg_rom_dataset(tr_size, genrand=genrand)
-        np.savetxt('../data/z_aff_avg_tr.txt', z_train, delimiter=',')
-        np.savetxt('../data/errors_aff_avg_tr.txt', errors_train, delimiter=',')
+        #  np.savetxt('../data/z_aff_avg_tr.txt', z_train, delimiter=',')
+        #  np.savetxt('../data/errors_aff_avg_tr.txt', errors_train, delimiter=',')
 
     if os.path.isfile('../data/z_aff_avg_eval.txt') and load_prev:
         z_val = np.loadtxt('../data/z_aff_avg_eval.txt', delimiter=',')
         errors_val =  np.loadtxt('../data/errors_aff_avg_eval.txt', delimiter=',')
     else:
         (z_val, errors_val) = gen_affine_avg_rom_dataset(v_size, genrand=genrand)
-        np.savetxt('../data/z_aff_avg_eval.txt', z_val, delimiter=',')
-        np.savetxt('../data/errors_aff_avg_eval.txt', errors_val, delimiter=',')
+        #  np.savetxt('../data/z_aff_avg_eval.txt', z_val, delimiter=',')
+        #  np.savetxt('../data/errors_aff_avg_eval.txt', errors_val, delimiter=',')
 
     return z_train, errors_train, z_val, errors_val
 
@@ -203,11 +203,16 @@ def lr_schedule_pre(epoch):
     else:
         return 5e-7
 
+def load_surrogate_model():
+    model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, 40)
+    model.summary()
+    model.load_weights('../data/surrogate_forward_model')
+
 def load_bn_model(randobs=True):
     if randobs:
-        model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, 40)
+        model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
         model.summary()
-        model.load_weights('../data/keras_model_res_bn_random_e_3')
+        model.load_weights('../data/error_model_lr_3e_4_layer_2')
         return model
     else:
         model = res_bn_fc_model(ELU(), Adam, 3e-4, 5, 50, 1446)
@@ -215,25 +220,47 @@ def load_bn_model(randobs=True):
         model.load_weights('../data/keras_model_res_bn')
         return model
 
-'''
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(True, genrand=True)
+qois_train = np.load('../data/qois_avg_tr.npy')
+qois_eval = np.load('../data/qois_avg_eval.npy')
 model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
 model.summary()
-#  model.load_weights('../data/keras_model_res_bn_random_e_3')
+model.load_weights('../data/error_model_lr_3e_4_layer_2')
 
 cbks = [LearningRateScheduler(lr_schedule)]
-history = model.fit(z_train, errors_train, epochs=10000, batch_size=500, shuffle=True, 
+history = model.fit(z_train, errors_train, epochs=1000, batch_size=100, shuffle=True, 
         validation_data=(z_val, errors_val),
         callbacks=cbks)
-model.save_weights('../data/keras_model_res_bn_random_e_3_overfit')
+model.save_weights('../data/error_model_lr_3e_4_layer_2')
 
 #  # Plots the training and validation loss
 tr_losses = history.history['mean_absolute_percentage_error']
 vmapes = history.history['val_mean_absolute_percentage_error']
-plt.semilogy(tr_losses[200:])
-plt.semilogy(vmapes[200:])
+plt.semilogy(tr_losses)
+plt.semilogy(vmapes)
 plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
 plt.xlabel("Epoch", fontsize=10)
 plt.ylabel("Absolute percentage error", fontsize=10)
 plt.savefig('bn_err.png', dpi=200)
-'''
+
+#  z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
+
+model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
+model.summary()
+model.load_weights('../data/surrogate_forward_model')
+cbks = [LearningRateScheduler(lr_schedule)]
+history = model.fit(z_train, qois_train, epochs=1000, batch_size=100, shuffle=True, 
+        validation_data=(z_val, qois_eval),
+        callbacks=cbks)
+model.save_weights('../data/surrogate_forward_model')
+#  # Plots the training and validation loss
+tr_losses = history.history['mean_absolute_percentage_error']
+vmapes = history.history['val_mean_absolute_percentage_error']
+#  plt.cla()
+#  plt.clf()
+#  plt.semilogy(tr_losses)
+#  plt.semilogy(vmapes)
+#  plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
+#  plt.xlabel("Epoch", fontsize=10)
+#  plt.ylabel("Absolute percentage error", fontsize=10)
+#  plt.savefig('bn_err_surrogate.png', dpi=200)

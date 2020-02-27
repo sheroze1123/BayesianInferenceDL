@@ -267,10 +267,11 @@ class Fin:
 
         self._k.assign(k)
         solve(self._F == self._a, z) 
-        y = assemble(z * self.dx)/self.domain_measure
-        assemble(self._F, tensor=self.A)
+        #  y = assemble(z * self.dx)/self.domain_measure
+        #  assemble(self._F, tensor=self.A)
 
-        return z, y, self.A.array(), self.B, self.C
+        #  return z, y, self.A.array(), self.B, self.C
+        return z, None, None, None, None
 
     def gradient(self, k, data):
         '''

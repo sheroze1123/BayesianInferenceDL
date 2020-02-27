@@ -91,6 +91,7 @@ A = g_p * np.linalg.inv(M) @ K + d_p * np.eye(num_pts)
 S, V_ = np.linalg.eig(A)
 #  inv_prior_cov = M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M
 prior_cov = M @ V_ @ np.diag(np.square(S)) @ V_.T @ M 
+np.save('prior_covariance', prior_cov)
 
 mean = np.zeros(num_pts)
 
