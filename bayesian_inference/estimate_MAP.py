@@ -15,7 +15,8 @@ from tensorflow.keras.optimizers import Adam
 from scipy.optimize import minimize, Bounds
 
 # ROMML imports
-from fom.forward_solve_exp import Fin
+#  from fom.forward_solve_exp import Fin
+from fom.forward_solve import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin 
 from deep_learning.dl_model import load_parametric_model_avg, load_bn_model
@@ -38,15 +39,26 @@ solver_r = AffineROMFin(V, err_model, phi, randobs)
 solver = Fin(V, randobs)
 z_true = dl.Function(V)
 
+prior_covariance = np.load('prior_covariance.npy')
+L = np.linalg.cholesky(prior_covariance)
+#  draw = np.random.randn(V.dim())
+#  nodal_vals = np.dot(L, draw)
+
 #Load random Gaussian field
 nodal_vals = np.load('res_x.npy')
 
 # For exp parametrization
 nodal_vals = np.log(nodal_vals)
 
+
 z_true.vector().set_local(nodal_vals)
 vmax = np.max(nodal_vals)
 vmin = np.min(nodal_vals)
+plt.cla()
+plt.clf()
+p = dl.plot(dl.exp(z_true))
+plt.colorbar(p)
+plt.savefig("z_true.png", dpi=200)
 
 #  z_true = dl.interpolate(dl.Expression('0.3 + 0.01 * x[0] * x[1] + 0.05 * (sin(2*x[1])*cos(2*x[0]) + 1.5)', degree=2),V)
 #  vmax = 0.7
@@ -66,8 +78,6 @@ z = dl.Function(V)
 #  z = dl.interpolate(dl.Expression('0.3 + 0.01 * x[0] * x[1]', degree=2),V)
 #  z_0_nodal_vals = z.vector()[:]
 
-prior_covariance = np.load('prior_covariance.npy')
-L = np.linalg.cholesky(prior_covariance)
 draw = np.load('uncorr_draw.npy')
 z_0_nodal_vals = np.dot(L, draw) #For exp parametrization
 z.vector().set_local(z_0_nodal_vals)
@@ -144,7 +154,8 @@ class RSolverWrapper:
         self.data = self.solver_r.data
         self.cost = None
         self.grad = None
-        self.time = 0.0
+        self.fwd_time = 0.0
+        self.grad_time = 0.0
 
     def cost_function(self, z_v):
         self.z.vector().set_local(z_v)
@@ -153,7 +164,7 @@ class RSolverWrapper:
         y_r = self.solver_r.qoi_reduced(w_r)
         self.solver._k.assign(self.z)
         self.cost = 0.5 * np.linalg.norm(y_r - self.data)**2 + dl.assemble(self.solver.reg)
-        self.time += (time.time() - t_i)
+        self.fwd_time += (time.time() - t_i)
         return self.cost
 
     def gradient(self, z_v):
@@ -162,14 +173,15 @@ class RSolverWrapper:
         self.solver._k.assign(self.z)
         self.grad, self.cost = self.solver_r.grad_reduced(self.z)
         self.grad = self.grad + dl.assemble(self.solver.grad_reg)
-        self.time += (time.time() - t_i)
+        self.grad_time += (time.time() - t_i)
         return self.grad
 
 #  solver_w = RSolverWrapper(err_model, solver_r, solver)
 solver_w = ROMMLSolverWrapper(err_model, solver_r, solver)
 #  solver_w = SolverWrapper(solver, obs_data)
 
-bounds = Bounds(0.95 * vmin, 1.05 * vmax)
+bounds = Bounds(1.05 * vmin, 1.05 * vmax)
+print(f"Optimization bounds: {vmin}, {vmax}")
 #  bounds = Bounds(0.3, 0.7)
 res = minimize(solver_w.cost_function, z_0_nodal_vals, 
         method='L-BFGS-B', 
@@ -183,6 +195,8 @@ print(f'Running time (fwd ROM): {solver_w.fwd_time_rom} seconds')
 print(f'Running time (fwd DL): {solver_w.fwd_time_dl} seconds')
 print(f'Running time (grad): {solver_w.grad_time} seconds')
 print(f'Running time (grad): {solver_w.grad_time_dl} seconds')
+#  print(f'Running time (fwd ROM): {solver_w.fwd_time} seconds')
+#  print(f'Running time (grad): {solver_w.grad_time} seconds')
 
 ####################3
 
@@ -194,9 +208,6 @@ obs_err = np.linalg.norm(obs_data - pred_obs)
 #  print(f"True: {obs_data}\n Pred: {pred_obs}")
 print(f"Relative observation error: {obs_err/np.linalg.norm(obs_data)*100:.4f}%")
 
-p = dl.plot(z, vmax=vmax, vmin=vmin)
-plt.colorbar(p)
-plt.savefig("z_map.png", dpi=200)
 
 plt.cla()
 plt.clf()
@@ -205,12 +216,6 @@ plt.colorbar(p)
 plt.savefig("z_map_exp.png", dpi=200)
 
 
-#  plt.cla()
-#  plt.clf()
-#  p = dl.plot(z_true, vmax=vmax, vmin=vmin)
-#  plt.colorbar(p)
-#  plt.savefig("z_true.png", dpi=200)
-
 reconst_err = dl.assemble(dl.inner(z - z_true, z - z_true) * dl.dx)
 z_true_norm = dl.assemble(dl.inner(z_true, z_true) * dl.dx)
 rel_r_err = np.sqrt(reconst_err/z_true_norm)
@@ -218,6 +223,7 @@ print(f"Relative reconstruction error: {rel_r_err * 100:.4f}%")
 print(f"Reconstruction error: {reconst_err:.4f}")
 
 rel_err = 100 * np.abs(z_true.vector()[:] - z.vector()[:])/np.sqrt(z_true_norm)
+print(f"Relative error: {np.average(rel_err)}")
 z_err = dl.Function(V)
 z_err.vector().set_local(rel_err)
 np.save('rel_err',rel_err)

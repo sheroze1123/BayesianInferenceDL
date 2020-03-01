@@ -7,7 +7,8 @@ from pandas import read_csv
 from dolfin import *
 from tqdm import tqdm
 
-from fom.forward_solve_exp import Fin
+#  from fom.forward_solve_exp import Fin
+from fom.forward_solve import Fin
 from fom.thermal_fin import get_space
 from rom.averaged_affine_ROM import AffineROMFin
 from bayesian_inference.gaussian_field import make_cov_chol
@@ -70,7 +71,7 @@ def gen_affine_avg_rom_dataset(dataset_size, resolution=40, genrand=False):
     L = np.linalg.cholesky(prior_cov)
 
     #  err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
-    err_model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 200, 1446, 40)
+    err_model = res_bn_fc_model(ELU(), Adam, 3e-5, 2, 1446, 1446, 40)
 
     solver_r = AffineROMFin(V, err_model, phi, genrand)
     qoi_errors = np.zeros((dataset_size, solver_r.n_obs))
@@ -95,13 +96,13 @@ def gen_affine_avg_rom_dataset(dataset_size, resolution=40, genrand=False):
         qois[i,:] = qoi
 
     if (dataset_size > 1000):
-        np.savetxt('../data/z_aff_avg_tr_2.txt', z_s, delimiter=",")
-        np.savetxt('../data/errors_aff_avg_tr_2.txt', qoi_errors, delimiter=",")
+        np.save('../data/z_aff_avg_tr_2', z_s)
+        np.save('../data/errors_aff_avg_tr_2', qoi_errors)
         np.save('../data/qois_avg_tr_2', qois)
 
     if (dataset_size < 400):
-        np.savetxt('../data/z_aff_avg_eval_2.txt', z_s, delimiter=",")
-        np.savetxt('../data/errors_aff_avg_eval_2.txt', qoi_errors, delimiter=",")
+        np.save('../data/z_aff_avg_eval_2', z_s)
+        np.save('../data/errors_aff_avg_eval_2', qoi_errors)
         np.save('../data/qois_avg_eval_2', qois)
     return (z_s, qoi_errors)
 
@@ -110,7 +111,7 @@ def gen_avg_rom_dataset(dataset_size, resolution=40):
     chol = make_cov_chol(V)
     z = Function(V)
     solver = Fin(V)
-    phi = np.loadtxt('data/basis_five_param.txt',delimiter=",")
+    phi = np.loadtxt('data/basis_nine_param.txt',delimiter=",")
     qoi_errors = np.zeros((dataset_size, 5))
 
     # TODO: Needs to be fixed for higher order functions

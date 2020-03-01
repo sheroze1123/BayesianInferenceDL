@@ -170,6 +170,9 @@ class Fin:
 
         self.gamma = Constant(1e-4)
 
+        self.M = assemble(inner(self.w, self.v) * self.dx(0)).array() 
+        self.K = assemble(inner(grad(self.w), grad(self.v)) * self.dx(0)).array()
+
         # Tikhonov Regularization
         #  self.grad_reg = self.gamma * inner(grad(self._k), grad(self.w_hat)) * self.dx(0)
         #  self.reg = 0.5 * self.gamma * inner(grad(self._k), grad(self._k)) * self.dx(0)
@@ -210,6 +213,36 @@ class Fin:
             self.n_obs = 9
             self.B_obs = self.observation_operator()
 
+        # second-order forward
+        self.u_tilde = TestFunction(self.V)
+        self.w_h = TestFunction(self.V)
+        self.lam_h = TestFunction(self.V)
+        self.u_sq = Function(self.V)
+        self.z = Function(self.V)
+        self.w_sq_f = Function(self.V)
+        self.lam_sq = Function(self.V)
+        self.lam = Function(self.V)
+        self.w_sq = TrialFunction(self.V)
+        self.l_sq = TrialFunction(self.V)
+
+        self.incr_F = exp(self._k) * inner(grad(self.w_sq), grad(self.lam_h)) * self.dx(0) \
+            + self.lam_h * self.Bi * self.w_sq * self.ds(1)
+        self.incr_a = -self.u_sq * exp(self._k) * inner(grad(self.z), grad(self.lam_h)) * self.dx(0) #TODO: Not exp version!
+
+        self.incr_F_adj = exp(self._k) * inner(grad(self.l_sq), grad(self.w_h)) * self.dx(0)\
+                + self.Bi * self.l_sq * self.w_h * self.ds(1)
+        self.incr_a_adj = -self.u_sq * exp(self._k) * inner(grad(self.lam), grad(self.w_h)) * self.dx(0)
+
+        self.hessian_action_form = self.u_tilde * exp(self._k) * \
+                inner(grad(self.z), grad(self.lam_sq)) * self.dx(0) \
+                + self.u_tilde * exp(self._k) * inner(grad(self.w_sq_f), grad(self.lam)) \
+                * self.dx(0) + self.u_tilde * self.u_sq * exp(self._k) * \
+                inner(grad(self.z), grad(self.lam)) * self.dx(0)
+
+        self.Fisher_Inf_action = self.u_tilde * exp(self._k) * \
+                inner(grad(self.z), grad(self.lam_sq)) * self.dx(0)
+
+        self.A_incr_adj = PETScMatrix()
         # Randomly sampling state vector for inverse problems
         #  self.n_samples = 3
         #  self.samp_idx = np.random.randint(0, self.dofs, self.n_samples)    
@@ -234,17 +267,20 @@ class Fin:
 
         self._k.assign(k)
         solve(self._F == self._a, z) 
-        y = assemble(z * self.dx)/self.domain_measure
-        assemble(self._F, tensor=self.A)
+        #  y = assemble(z * self.dx)/self.domain_measure
+        #  assemble(self._F, tensor=self.A)
 
-        return z, y, self.A.array(), self.B, self.C
+        #  return z, y, self.A.array(), self.B, self.C
+        return z, None, None, None, None
 
     def gradient(self, k, data):
+        '''
+        Computes the gradient of the cost function with respect to k
+        using the adjoint method.
+        '''
 
-        # TODO: Exponential parametrization of conductivity?
         if (np.allclose((np.linalg.norm(k.vector()[:])), 0.0)):
             print("parameter vector norm close to zero!")
-            return np.zeros(k.vector()[:].shape)
 
         z = Function(self.V)
 
@@ -267,6 +303,85 @@ class Fin:
             print("Gradient norm is zero!")
 
         return grad_vec
+
+    def sensitivity(self, k):
+        '''
+        Computes the gradient of the parameter-to-observable w.r.t k
+        using the adjoint method
+        '''
+        z = Function(self.V)
+
+        self._k.assign(k)
+        solve(self._F == self._a, z)
+        pred_obs = np.dot(self.B_obs, z.vector()[:])
+
+        adj_RHS = -self.B_obs.T
+        assemble(self._adj_F, tensor=self.A_adj)
+        v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
+
+        #  v = Function(self.V)
+        #  v.vector().set_local(v_nodal_vals)
+
+        k_hat = TestFunction(self.V)
+        v_hat = TrialFunction(self.V)
+        #  grad_w_form = k_hat * inner(grad(z), grad(v)) * self.dx(0)
+        grad_w_form = k_hat * inner(grad(z), grad(v_hat)) * self.dx(0)
+        #  grad_vec = assemble(grad_w_form)[:]
+        grad_vec = np.dot(assemble(grad_w_form).array(), v_nodal_vals)
+
+        return grad_vec.T
+
+    def hessian_action(self, k, u_2, data):
+        '''
+        Computes the Hessian (w.r.t. objective function) action 
+        given a second variation u_2
+        and a parameter location k #TODO: fix the exponentiation
+        '''
+
+        self._k.assign(k)
+        solve(self._F == self._a, self.z) 
+        pred_obs = np.dot(self.B_obs, self.z.vector()[:])
+
+        adj_RHS = -np.dot((pred_obs - data).T, self.B_obs)
+        assemble(self._adj_F, tensor=self.A_adj)
+        lam_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
+        self.lam.vector().set_local(lam_nodal_vals)
+
+        self.u_sq.assign(u_2)
+        solve(self.incr_F == self.incr_a, self.w_sq_f)
+        assemble(self.incr_F_adj, tensor=self.A_incr_adj)
+        b_incr_adj_RHS = assemble(self.incr_a_adj)
+        l_sq_np = np.linalg.solve(self.A_incr_adj.array(), b_incr_adj_RHS[:]  + \
+                -np.dot(np.dot(self.B_obs, self.w_sq_f.vector()[:]).T, self.B_obs))
+        self.lam_sq.vector().set_local(l_sq_np)
+
+        return assemble(self.hessian_action_form)[:]
+
+    def GN_hessian_action(self, k, u_2, data):
+        '''
+        Computes the Gauss-Newton Hessian (w.r.t. objective function) action 
+        given a second variation u_2
+        and a parameter location k
+        '''
+
+        self._k.assign(k)
+        solve(self._F == self._a, self.z) 
+        pred_obs = np.dot(self.B_obs, self.z.vector()[:])
+
+        adj_RHS = -np.dot((pred_obs - data).T, self.B_obs)
+        assemble(self._adj_F, tensor=self.A_adj)
+        lam_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
+        self.lam.vector().set_local(lam_nodal_vals)
+
+        self.u_sq.assign(u_2)
+        solve(self.incr_F == self.incr_a, self.w_sq_f)
+        assemble(self.incr_F_adj, tensor=self.A_incr_adj)
+        b_incr_adj_RHS = assemble(self.incr_a_adj)
+        l_sq_np = np.linalg.solve(self.A_incr_adj.array(), \
+                -np.dot(np.dot(self.B_obs, self.w_sq_f.vector()[:]).T, self.B_obs))
+        self.lam_sq.vector().set_local(l_sq_np)
+
+        return assemble(self.Fisher_Inf_action)[:]
 
     def averaging_operator(self):
         '''

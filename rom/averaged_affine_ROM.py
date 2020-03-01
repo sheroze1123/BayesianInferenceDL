@@ -369,7 +369,7 @@ class AffineROMFin:
                            self.data_ph: self.data})[0]
 
         self.NN_grad_val = f_eps_dp_eps.reshape(f_eps_dp_eps.size)
-        self.romml_grad_time_dl += (time.time() - t_i
+        self.romml_grad_time_dl += (time.time() - t_i)
         grad =  f_x_dp_x + self.NN_grad_val
 
         loss = self.session.run(self.loss,
