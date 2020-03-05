@@ -61,6 +61,7 @@ class AffineROMFin:
         Arguments:
             V - dolfin FunctionSpace
         '''
+        self.fwd_time = 0.0
         self.rom_grad_time = 0.0
         self.romml_grad_time = 0.0
         self.romml_grad_time_dl = 0.0
@@ -269,7 +270,9 @@ class AffineROMFin:
             w : numpy array     - reduced solution
         '''
 
+        t_i = time.time()
         k_s = self.subfin_avg_op(k)
+        self.fwd_time += (time.time() - t_i)
         return self.forward_nine_param_reduced(k_s)
 
     def forward_nine_param_reduced(self, k_s):
@@ -286,11 +289,21 @@ class AffineROMFin:
         for i in range(len(k_s)):
             self.averaged_k_s[i].assign(k_s[i])
 
-        assemble(self._F, tensor=self.A)
+        assemble(self._F, tensor=self.A) #Precalculate this>?
+
+        t_i = time.time()
         self.A.mat().matMult(self.phi_p, self.psi_p)
         self.psi_p.transposeMatMult(self.psi_p, self._A_r)
         self.psi_p.multTranspose(self.B_p.vec(), self._B_r)
-        w_r = np.linalg.solve(self._A_r.getDenseArray(), self._B_r.getArray())
+        self.fwd_time += (time.time() - t_i)
+        #w_r = np.linalg.solve(self._A_r.getDenseArray(), self._B_r.getArray())
+        
+        A_r_dense = self._A_r.getDenseArray()
+        B_r_dense = self._B_r.getArray()
+        t_i = time.time()
+        w_r = np.linalg.solve(A_r_dense, B_r_dense)
+        self.fwd_time += (time.time() - t_i)
+
         #  self.ksp.setOperators(self._A_r)
         #  self.ksp.solve(self._B_r, self._w_r)
         #  w_r = self._w_r[:]
@@ -303,7 +316,8 @@ class AffineROMFin:
         Args:
             w : Temperature distribution over the fin
         '''
-        return np.dot(self.B_obs, w.vector()[:])
+        qoi_vals =  np.dot(self.B_obs, w.vector()[:])
+        return qoi_vals
         #  return self.subfin_avg_op(w) 
 
     def qoi_reduced(self, w_r):
@@ -313,11 +327,14 @@ class AffineROMFin:
         Args:
             w_r : Temperature distribution over the fin in reduced dimensions
         '''
-        return np.dot(self.B_obs_phi, w_r)
+        t_i = time.time()
+        qoi_vals =  np.dot(self.B_obs_phi, w_r)
+        self.fwd_time += (time.time() - t_i)
+        return qoi_vals
 
     def grad_reduced(self, k):
-        t_i = time.time()
         w_r = self.forward_reduced(k)
+        t_i = time.time()
         reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
         reduced_adj_rhs = np.dot(self.B_obs_phi.T, self.data - reduced_fwd_obs)
         self.rom_grad_time += (time.time() - t_i)
@@ -339,9 +356,9 @@ class AffineROMFin:
         return dJ_dk, J
 
     def grad_romml(self, k):
-        t_i = time.time()
         w_r = self.forward_reduced(k)
         e_NN = self.dl_model.predict([[k.vector()[:]]])[0]
+        t_i = time.time()
 
         reduced_fwd_obs = np.dot(self.B_obs_phi, w_r)
         romml_fwd_obs = reduced_fwd_obs + e_NN

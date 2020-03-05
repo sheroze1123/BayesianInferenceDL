@@ -62,16 +62,16 @@ def res_bn_fc_model(activation, optimizer, lr, n_layers, n_weights, input_shape=
 def gen_affine_avg_rom_dataset(dataset_size, resolution=40, genrand=False):
     V = get_space(resolution)
     dofs = len(V.dofmap().dofs())
-    #  chol = make_cov_chol(V, length=1.6)
     z = Function(V)
     solver = Fin(V, genrand)
     phi = np.loadtxt('../data/basis_nine_param.txt',delimiter=",")
 
-    prior_cov = np.load('../bayesian_inference/prior_covariance.npy')
-    L = np.linalg.cholesky(prior_cov)
+    chol = make_cov_chol(V, length=1.6)
+    #  prior_cov = np.load('../bayesian_inference/prior_covariance_0.07_0.07.npy')
+    #  L = np.linalg.cholesky(prior_cov)
 
     #  err_model = load_parametric_model_avg('elu', Adam, 0.0003, 5, 58, 200, 2000, V.dim())
-    err_model = res_bn_fc_model(ELU(), Adam, 3e-5, 2, 1446, 1446, 40)
+    err_model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, solver.n_obs)
 
     solver_r = AffineROMFin(V, err_model, phi, genrand)
     qoi_errors = np.zeros((dataset_size, solver_r.n_obs))
@@ -81,8 +81,12 @@ def gen_affine_avg_rom_dataset(dataset_size, resolution=40, genrand=False):
     z_s = np.zeros((dataset_size, V.dim()))
 
     for i in tqdm(range(dataset_size)):
-        draw = np.random.randn(dofs)
-        nodal_vals = np.dot(L, draw)
+        #  draw = np.random.randn(dofs)
+        #  nodal_vals = np.exp(np.dot(L, draw))
+
+        norm = np.random.randn(V.dim())
+        nodal_vals = np.exp(0.5 * chol.T @ norm)
+        
         z.vector().set_local(nodal_vals)
         z_s[i,:] = nodal_vals
 
@@ -96,14 +100,14 @@ def gen_affine_avg_rom_dataset(dataset_size, resolution=40, genrand=False):
         qois[i,:] = qoi
 
     if (dataset_size > 1000):
-        np.save('../data/z_aff_avg_tr_2', z_s)
-        np.save('../data/errors_aff_avg_tr_2', qoi_errors)
-        np.save('../data/qois_avg_tr_2', qois)
+        np.save('../data/z_aff_avg_tr_avg_obs_3', z_s)
+        np.save('../data/errors_aff_avg_tr_avg_obs_3', qoi_errors)
+        np.save('../data/qois_avg_tr_avg_obs_3', qois)
 
-    if (dataset_size < 400):
-        np.save('../data/z_aff_avg_eval_2', z_s)
-        np.save('../data/errors_aff_avg_eval_2', qoi_errors)
-        np.save('../data/qois_avg_eval_2', qois)
+    if (dataset_size < 600):
+        np.save('../data/z_aff_avg_eval_avg_obs_3', z_s)
+        np.save('../data/errors_aff_avg_eval_avg_obs_3', qoi_errors)
+        np.save('../data/qois_avg_eval_avg_obs_3', qois)
     return (z_s, qoi_errors)
 
 def gen_avg_rom_dataset(dataset_size, resolution=40):

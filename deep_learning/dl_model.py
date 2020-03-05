@@ -28,8 +28,8 @@ def load_dataset_avg_rom(load_prev=True, tr_size=6000, v_size=500, genrand=False
         (z_train, errors_train) = gen_affine_avg_rom_dataset(tr_size, genrand=genrand)
 
     if os.path.isfile('../data/z_aff_avg_eval.npy') and load_prev:
-        z_val = np.loadtxt('../data/z_aff_avg_eval.npy')
-        errors_val =  np.loadtxt('../data/errors_aff_avg_eval.npy')
+        z_val = np.load('../data/z_aff_avg_eval.npy')
+        errors_val =  np.load('../data/errors_aff_avg_eval.npy')
     else:
         (z_val, errors_val) = gen_affine_avg_rom_dataset(v_size, genrand=genrand)
 
@@ -199,16 +199,27 @@ def lr_schedule_pre(epoch):
     else:
         return 5e-7
 
-def load_surrogate_model():
-    model = res_bn_fc_model(ELU(), Adam, 3e-5, 3, 100, 1446, 40)
-    model.summary()
-    model.load_weights('../data/surrogate_forward_model')
+def load_surrogate_model(randobs=True):
+    if randobs:
+        model = res_bn_fc_model(ELU(), Adam, 3e-4, 3, 50, 1446, 40)
+        model.summary()
+        #  model.load_weights('../data/surrogate_forward_model_3_e_4_layer_2')
+        model.load_weights('../data/surrogate_forward_model_3_e_4_layer_2')
+        return model
+    else:
+        model = res_bn_fc_model(ELU(), Adam, 3e-4, 3, 50, 1446)
+        model.summary()
+        #  model.load_weights('../data/surrogate_forward_model_3_e_4_layer_2')
+        model.load_weights('../data/surrogate_forward_model_3_e_4_layer_2_avg_obs')
+        return model
 
 def load_bn_model(randobs=True):
     if randobs:
-        model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)
+        #  model = res_bn_fc_model(ELU(), Adam, 3e-4, 3, 100, 1446, 40)
+        model = res_bn_fc_model(ELU(), Adam, 3e-4, 3, 50, 1446, 40)
         model.summary()
-        model.load_weights('../data/error_model_lr_3e_4_layer_2')
+        #  model.load_weights('../data/error_model_lr_3e_4_layer_2')
+        model.load_weights('../data/keras_model_res_bn_random')
         return model
     else:
         model = res_bn_fc_model(ELU(), Adam, 3e-4, 5, 50, 1446)
@@ -217,7 +228,7 @@ def load_bn_model(randobs=True):
         return model
 
 '''
-z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=True)
+z_train, errors_train, z_val, errors_val = load_dataset_avg_rom(False, genrand=False)
 qois_train = np.load('../data/qois_avg_tr.npy')
 qois_eval = np.load('../data/qois_avg_eval.npy')
 model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 1446, 1446, 40)

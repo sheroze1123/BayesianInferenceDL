@@ -168,22 +168,22 @@ class Fin:
                 self.Bi * self.w_hat * self.v_trial * self.ds(1)
         self.A_adj = PETScMatrix()
 
-        self.gamma = Constant(1e-4)
+        self.gamma = Constant(1e-6)
 
         self.M = assemble(inner(self.w, self.v) * self.dx(0)).array() 
         self.K = assemble(inner(grad(self.w), grad(self.v)) * self.dx(0)).array()
 
         # Tikhonov Regularization
-        #  self.grad_reg = self.gamma * inner(grad(self._k), grad(self.w_hat)) * self.dx(0)
-        #  self.reg = 0.5 * self.gamma * inner(grad(self._k), grad(self._k)) * self.dx(0)
+        self.grad_reg = self.gamma * inner(grad(self._k), grad(self.w_hat)) * self.dx(0)
+        self.reg = 0.5 * self.gamma * inner(grad(self._k), grad(self._k)) * self.dx(0)
 
         #  Total Variation Regularization
-        def TV(u, eps=Constant(1e-7)):
-            return sqrt( inner(grad(u), grad(u)) + eps)
+        #  def TV(u, eps=Constant(1e-7)):
+            #  return sqrt( inner(grad(u), grad(u)) + eps)
             
-        self.reg = 0.5 * self.gamma * TV(self._k) * self.dx(0)
-        self.grad_reg = self.gamma / TV(self._k) \
-                * inner(grad(self._k), grad(self.w_hat))* self.dx(0)
+        #  self.reg = 0.5 * self.gamma * TV(self._k) * self.dx(0)
+        #  self.grad_reg = self.gamma / TV(self._k) \
+                #  * inner(grad(self._k), grad(self.w_hat))* self.dx(0)
 
         self.fin1_A = assemble(Constant(1.0) * self.dx_s(1))
         self.fin2_A = assemble(Constant(1.0) * self.dx_s(2))

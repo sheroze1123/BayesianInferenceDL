@@ -83,15 +83,16 @@ M = forward_op._solver.M
 # Stiffness matrix
 K = forward_op._solver.K
 
-d_p = 1
-g_p = 0.0001
+d_p = 0.07
+g_p = 0.07
 
 # Discretized elliptic operator representing inv. sq. root of covariance
 A = g_p * np.linalg.inv(M) @ K + d_p * np.eye(num_pts)
 S, V_ = np.linalg.eig(A)
+#  S = np.square(S)
 #  inv_prior_cov = M @ V_ @ np.diag(np.square(1./S)) @ V_.T @ M
 prior_cov = M @ V_ @ np.diag(np.square(S)) @ V_.T @ M 
-np.save('prior_covariance', prior_cov)
+np.save('prior_covariance_0.07_0.07', prior_cov)
 
 mean = np.zeros(num_pts)
 
@@ -116,7 +117,7 @@ def H_tilde_action(x):
     H_V_LAM_x = forward_op._solver.GN_hessian_action(k_MAP, u_2, obs_data)
     return np.dot(V_LAM.T, H_V_LAM_x)
 
-r_samps = 70 # is equal to desired rank + oversampling factor
+r_samps = 30 # is equal to desired rank + oversampling factor
 Y = np.zeros((1446, r_samps))
 GAM = np.zeros((1446, r_samps))
 for i in range(r_samps):
@@ -156,7 +157,7 @@ with misfit_model:
             mu=qoi, cov=obs_covariance, observed=obs_data)
 
     #  prior_realization.vector().set_local(nodal_vals.random())
-    #  p = dl.plot(prior_realization)
+    #  p = dl.plot(dl.exp(prior_realization))
     #  plt.colorbar(p)
     #  plt.savefig('random_realization.png')
     
