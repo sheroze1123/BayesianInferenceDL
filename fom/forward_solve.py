@@ -168,10 +168,21 @@ class Fin:
                 self.Bi * self.w_hat * self.v_trial * self.ds(1)
         self.A_adj = PETScMatrix()
 
-        self.gamma = Constant(1e-6)
-
+        # Mass and stiffness matrices
         self.M = assemble(inner(self.w, self.v) * self.dx(0)).array() 
         self.K = assemble(inner(grad(self.w), grad(self.v)) * self.dx(0)).array()
+
+        # Direct sensitivity calculations
+        k_hat = TestFunction(self.V)
+        v_hat = TrialFunction(self.V)
+        self.z_sens = Function(self.V)
+        self.grad_w_form = k_hat * inner(grad(self.z_sens), grad(v_hat)) * self.dx(0)
+
+        #################################################################
+        ## Regularization specific
+        #################################################################
+
+        self.gamma = Constant(1e-6)
 
         # Tikhonov Regularization
         self.grad_reg = self.gamma * inner(grad(self._k), grad(self.w_hat)) * self.dx(0)
@@ -184,6 +195,10 @@ class Fin:
         #  self.reg = 0.5 * self.gamma * TV(self._k) * self.dx(0)
         #  self.grad_reg = self.gamma / TV(self._k) \
                 #  * inner(grad(self._k), grad(self.w_hat))* self.dx(0)
+
+        #################################################################
+        ## Sub-fin specific
+        #################################################################
 
         self.fin1_A = assemble(Constant(1.0) * self.dx_s(1))
         self.fin2_A = assemble(Constant(1.0) * self.dx_s(2))
@@ -309,25 +324,15 @@ class Fin:
         Computes the gradient of the parameter-to-observable w.r.t k
         using the adjoint method
         '''
-        z = Function(self.V)
-
         self._k.assign(k)
-        solve(self._F == self._a, z)
-        pred_obs = np.dot(self.B_obs, z.vector()[:])
+        solve(self._F == self._a, self.z_sens)
+        pred_obs = np.dot(self.B_obs, self.z_sens.vector()[:])
 
         adj_RHS = -self.B_obs.T
         assemble(self._adj_F, tensor=self.A_adj)
         v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
 
-        #  v = Function(self.V)
-        #  v.vector().set_local(v_nodal_vals)
-
-        k_hat = TestFunction(self.V)
-        v_hat = TrialFunction(self.V)
-        #  grad_w_form = k_hat * inner(grad(z), grad(v)) * self.dx(0)
-        grad_w_form = k_hat * inner(grad(z), grad(v_hat)) * self.dx(0)
-        #  grad_vec = assemble(grad_w_form)[:]
-        grad_vec = np.dot(assemble(grad_w_form).array(), v_nodal_vals)
+        grad_vec = np.dot(assemble(self.grad_w_form).array(), v_nodal_vals)
 
         return grad_vec.T
 
