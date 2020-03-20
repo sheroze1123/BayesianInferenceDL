@@ -60,7 +60,7 @@ grad_y = np.zeros((batch_size, solver.n_obs, solver.dofs), dtype=np.float64)
 
 def fwd_w_grad(U_v):
     for i in range(batch_size):
-        U_func.vector().set_local(np.exp(U_v[i,:]))
+        U_func.vector().set_local(U_v[i,:])
         w, _, _, _, _ = solver.forward(U_func)
         y[i,:] = solver.qoi_operator(w)
         grad_y[i,:,:] = solver.sensitivity(U_func)
@@ -78,7 +78,6 @@ def G(x, name=None):
                               name=name,
                               grad_func=_fwd_grad)
         return G_U
-
 
 # Refer to https://www.tensorflow.org/api_docs/python/tf/custom_gradient
 #  @tf.custom_gradient
@@ -106,23 +105,24 @@ def G(x, name=None):
 
     #  return y_tf, grad_G
 
-# Tensorflow Keras model
+# Training constants
 n_weights = 80
 lr = 3e-4
+alpha = 0.1
+train_dataset_size = 1000 # Get subset of data due to slowness
+val_dataset_size = 100
+n_epochs = 100
+
+# Tensorflow Keras model
 Y_input = Input(shape=(solver.n_obs,), name='Y_input')
 layer1 = Dense(n_weights, input_shape=(solver.dofs,), activation='relu')(Y_input)
 layer2 = Dense(n_weights, activation='relu')(layer1)
 U_output = Dense(solver.dofs, name='U_output')(layer2)
 model = Model(inputs=Y_input, outputs=U_output)
 
-#  G = _py_func_with_gradient(fwd_map, [U_output], [tf.float64], grad_func=fwd_map_grad)[0] 
-
-
-alpha = 0.1
-
 def custom_loss(U_true, U_pred):
     loss =  tf.reduce_mean(tf.square(U_pred - tf.math.log(U_true)))
-    fwd_loss = alpha * tf.reduce_mean(tf.square(Y_input - G(U_output)))
+    fwd_loss = alpha * tf.reduce_mean(tf.square(Y_input - G(tf.math.exp(U_output))))
     #  fwd_loss = K.print_tensor(fwd_loss, message='fwd_loss=')
     #  loss = K.print_tensor(loss, message='mse loss=')
     return loss + fwd_loss
@@ -135,14 +135,12 @@ U_val = np.load('../data/parameters_validation_dataset.npy')
 Y_train = np.load('../data/fom_qois_training_dataset.npy')
 Y_val = np.load('../data/fom_qois_validation_dataset.npy')
 
-train_dataset_size = 1000 # Get subset of data due to slowness
-val_dataset_size = 100
 U_train = U_train[:train_dataset_size, :]
 U_val = U_val[:val_dataset_size, :]
 Y_train = Y_train[:train_dataset_size, :]
 Y_val = Y_val[:val_dataset_size, :]
 
-model.fit(Y_train, U_train, batch_size=batch_size, epochs=1000, shuffle=True, 
+model.fit(Y_train, U_train, batch_size=batch_size, epochs=n_epochs, shuffle=True, 
         validation_data=(Y_val, U_val))
         
 
