@@ -61,11 +61,17 @@ def fwd_map(U_v):
         y[i,:] = solver.qoi_operator(w)
     return y
 
-def fwd_map_grad(U_v):
+def fwd_map_grad_impl(U_v):
+    import pdb; pdb.set_trace()
     for i in range(batch_size):
         U_func.vector().set_local(U_v[i,:])
         grad_y[i,:,:] = solver.sensitivity(U_func)
     return grad_y
+
+def fwd_map_grad(unused_op, grad):
+    x = unused_op.inputs[0]
+    grad_wrapper = tf.py_func(fwd_map_grad_impl, [x], [tf.float32])
+    return grad * grad_wrapper
 
 # Refer to https://www.tensorflow.org/api_docs/python/tf/custom_gradient
 #  @tf.custom_gradient
@@ -102,7 +108,7 @@ layer2 = Dense(n_weights, activation='relu')(layer1)
 U_output = Dense(solver.dofs, name='U_output')(layer2)
 model = Model(inputs=Y_input, outputs=U_output)
 
-G = _py_func_with_gradient(fwd_map, [U_output], [tf.float32])[0] 
+G = _py_func_with_gradient(fwd_map, [U_output], [tf.float32], grad_func=fwd_map_grad)[0] 
 
 
 alpha = 0.1
@@ -114,8 +120,8 @@ def custom_loss(U_pred, U_true):
 model.compile(loss=custom_loss, optimizer=Adam(lr=lr))
 model.summary()
 
-U_train = np.exp(np.load('../data/parameters_training_dataset.npy'))
-U_val = np.exp(np.load('../data/parameters_validation_dataset.npy'))
+U_train = np.load('../data/parameters_training_dataset.npy')
+U_val = np.load('../data/parameters_validation_dataset.npy')
 Y_train = np.load('../data/fom_qois_training_dataset.npy')
 Y_val = np.load('../data/fom_qois_validation_dataset.npy')
 
