@@ -332,7 +332,10 @@ class Fin:
         assemble(self._adj_F, tensor=self.A_adj)
         v_nodal_vals = np.linalg.solve(self.A_adj.array(), adj_RHS)
 
-        grad_vec = np.dot(assemble(self.grad_w_form).array(), v_nodal_vals)
+        grad_assembled = assemble(self.grad_w_form).array()
+
+        #  grad_vec = np.dot(grad_assembled, v_nodal_vals)
+        grad_vec = grad_assembled @ v_nodal_vals
 
         return grad_vec.T
 
