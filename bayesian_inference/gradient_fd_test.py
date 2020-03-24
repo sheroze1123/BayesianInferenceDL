@@ -29,12 +29,15 @@ class SolverWrapper:
         self.z.vector().set_local(z_v)
         w, y, A, B, C = self.solver.forward(self.z)
         y = self.solver.qoi_operator(w)
-        cost = 0.5 * np.linalg.norm(y - self.data)**2 + dl.assemble(self.solver.reg)
+        cost = 0.5 * np.linalg.norm(y - self.data)**2 #+ dl.assemble(self.solver.reg)
         return cost
 
     def gradient(self, z_v):
         self.z.vector().set_local(z_v)
-        grad = self.solver.gradient(self.z, self.data) + dl.assemble(self.solver.grad_reg)[:]
+        w, _, _, _, _ = self.solver.forward(self.z)
+        y = self.solver.qoi_operator(w)
+        grad = np.dot((y - self.data).T, self.solver.sensitivity(self.z))
+        #  grad = self.solver.gradient(self.z, self.data)# + dl.assemble(self.solver.grad_reg)[:]
         return grad
 
 # Setup synthetic observations
@@ -53,8 +56,7 @@ z = dl.Function(V)
 norm = np.random.randn(len(chol))
 eps_z = np.exp(0.5 * chol.T @ norm)
 z.vector().set_local(eps_z)
-eps_norm = np.sqrt(dl.assemble(dl.inner(z,z)*dl.dx))
-eps_norm = np.linalg.norm(eps_z)
+eps_norm = dl.norm(z)
 eps_z = eps_z/eps_norm
 norm = np.random.randn(len(chol))
 z_ = np.exp(0.5 * chol.T @ norm)
