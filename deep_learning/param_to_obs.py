@@ -6,20 +6,20 @@ import random
 import numpy as np
 warnings.filterwarnings('ignore',category=FutureWarning)
 
+import tensorflow as tf
+from tensorflow.keras import Sequential, Model, Input
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import *
+from tensorflow.python.framework import ops
+
+tf.keras.backend.set_floatx('float64')
+tf.compat.v1.disable_eager_execution()
+
 from fom.forward_solve import Fin
 from fom.thermal_fin import get_space
 import dolfin as dl
 dl.set_log_level(40)
 
-import tensorflow as tf
-from tensorflow.keras import Sequential, Model, Input
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import *
-from tensorflow.keras.backend import get_session, gradients
-import tensorflow.keras.backend as K
-from tensorflow.python.framework import ops
-
-tf.keras.backend.set_floatx('float64')
 
 # Create FunctionSpace
 V = get_space(40)
@@ -47,12 +47,12 @@ def _py_func_with_gradient(func, inp, Tout, stateful=True, name=None,
     tf.RegisterGradient(rnd_name)(grad_func)
 
     # Get current graph
-    g = tf.get_default_graph()
+    g = tf.compat.v1.get_default_graph()
 
     # Add gradient override map
     with g.gradient_override_map(
             {"PyFunc": rnd_name, "PyFuncStateless": rnd_name}):
-        return tf.py_func(func, inp, Tout, stateful=stateful, name=name)
+        return tf.compat.v1.py_func(func, inp, Tout, stateful=stateful, name=name)
 
 batch_size = 10
 y = np.zeros((batch_size, solver.n_obs), dtype=np.float64)
@@ -78,6 +78,27 @@ def G(x, name=None):
                               name=name,
                               grad_func=_fwd_grad)
         return G_U
+
+#  @tf.custom_gradient
+#  def G(x):
+    #  import pdb; pdb.set_trace()
+    #  U_v = x.numpy() #DOES NOT WORK AS THIS WILL FAIL.
+    #  for i in range(batch_size):
+        #  U_func.vector().set_local(U_v[i,:])
+        #  w, _, _, _, _ = solver.forward(U_func)
+        #  y[i,:] = solver.qoi_operator(w)
+        #  grad_y[i,:,:] = solver.sensitivity(U_func)
+    #  def grad(dy):
+        #  '''
+        #  A vector-argument vector-valued function G's derivatives 
+        #  should be its Jacobian matrix J. Here we are expressing 
+        #  the Jacobian J as a function grad_G which defines how J 
+        #  will transform a vector grad_ys when left-multiplied with it 
+        #  (grad_ys * J). This functional representation of a matrix is 
+        #  convenient to use for chain-rule calculation.
+        #  '''
+        #  return dy * grad_y
+    #  return y, grad
 
 # Refer to https://www.tensorflow.org/api_docs/python/tf/custom_gradient
 #  @tf.custom_gradient
