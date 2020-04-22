@@ -4,6 +4,8 @@ import warnings
 import string
 import random
 import numpy as np
+import matplotlib; matplotlib.use('macosx')
+import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore',category=FutureWarning)
 
 import tensorflow as tf
@@ -136,10 +138,45 @@ n_epochs = 100
 
 # Tensorflow Keras model
 Y_input = Input(shape=(solver.n_obs,), name='Y_input')
-layer1 = Dense(n_weights, input_shape=(solver.dofs,), activation='relu')(Y_input)
-layer2 = Dense(n_weights, activation='relu')(layer1)
-U_output = Dense(solver.dofs, name='U_output')(layer2)
+layer1 = Dense(n_weights, input_shape=(solver.dofs,), activation='relu')
+layer1out = layer1(Y_input)
+layer2 = Dense(n_weights, activation='relu')
+layer2out = layer2(layer1out)
+U_output = Dense(solver.dofs, name='U_output')(layer2out)
 model = Model(inputs=Y_input, outputs=U_output)
+
+
+L = tf.reduce_mean(tf.square(Y_input - G(tf.math.exp(U_output))))
+grad_bias_1 = gradients(L, model.trainable_weights[1])[0]
+dummy_inp = np.random.randn(batch_size, solver.n_obs)
+grad_bias_1_eval = get_session().run(grad_bias_1, feed_dict={Y_input:dummy_inp})
+bias_1_vals = layer1.get_weights()[1]
+kernel_vals = layer1.get_weights()[0]
+L_0 = get_session().run(L, feed_dict={Y_input:dummy_inp})
+eps_bias = np.random.randn(n_weights) #Random direction to perturn bias weights
+eps_bias = eps_bias/np.linalg.norm(eps_bias)
+dir_grad = np.dot(grad_bias_1_eval, eps_bias)
+
+n_eps = 32
+hs = np.power(2., -np.arange(n_eps))
+
+err_grads = []
+grads = []
+for h in hs:
+    b_h = bias_1_vals + h * eps_bias #Perturb bias
+    layer1.set_weights([kernel_vals, b_h]) #Update bias in model
+    L_h = get_session().run(L, feed_dict={Y_input:dummy_inp}) #Compute loss post bias
+    a_g = (L_h - L_0)/h
+    grads.append(a_g)
+    err = abs(a_g - dir_grad)/abs(dir_grad)
+    err_grads.append(err)
+
+plt.loglog(hs, err_grads, "-ob", label="Error Grad")
+plt.loglog(hs, (.5*err_grads[0]/hs[0])*hs, "-.k", label="First Order")
+plt.savefig('grad_fd_check_G_wrt_bias.png', dpi=200)
+plt.cla()
+plt.clf()
+import pdb; pdb.set_trace()
 
 def custom_loss(U_true, U_pred):
     loss =  tf.reduce_mean(tf.square(U_pred - tf.math.log(U_true)))

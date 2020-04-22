@@ -176,6 +176,8 @@ class Fin:
         k_hat = TestFunction(self.V)
         v_hat = TrialFunction(self.V)
         self.z_sens = Function(self.V)
+
+        # Weak form of gradient
         self.grad_w_form = k_hat * inner(grad(self.z_sens), grad(v_hat)) * self.dx(0)
 
         #################################################################
