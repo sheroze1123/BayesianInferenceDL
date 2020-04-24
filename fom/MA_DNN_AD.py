@@ -16,22 +16,22 @@ from tensorflow.python.framework import ops
 
 tf.keras.backend.set_floatx('float64')
 
-import dolfin as dl
-import hippylib as hl
-from fom.model_ad_diff import *
+#  import dolfin as dl
+#  import hippylib as hl
+#  from fom.model_ad_diff import *
 
-batch_size = 10
+batch_size = 2
 
-mesh_fname = 'ad_10k.xml'
-mesh = dl.Mesh(mesh_fname)
-Vh = dl.FunctionSpace(mesh, "Lagrange", 2)
-ic_expr = dl.Expression('min(0.5,exp(-100*(pow(x[0]-0.35,2) +  pow(x[1]-0.7,2))))', element=Vh.ufl_element())
-true_initial_condition = dl.interpolate(ic_expr, Vh).vector()
+#  mesh_fname = 'ad_10k.xml'
+#  mesh = dl.Mesh(mesh_fname)
+#  Vh = dl.FunctionSpace(mesh, "Lagrange", 2)
+#  ic_expr = dl.Expression('min(0.5,exp(-100*(pow(x[0]-0.35,2) +  pow(x[1]-0.7,2))))', element=Vh.ufl_element())
+#  true_initial_condition = dl.interpolate(ic_expr, Vh).vector()
 
-gamma = 1.
-delta = 8.
-prior = hl.BiLaplacianPrior(Vh, gamma, delta, robin_bc=True)
-prior.mean = dl.interpolate(dl.Constant(0.25), Vh).vector()
+#  gamma = 1.
+#  delta = 8.
+#  prior = hl.BiLaplacianPrior(Vh, gamma, delta, robin_bc=True)
+#  prior.mean = dl.interpolate(dl.Constant(0.25), Vh).vector()
 
 t_init         = 0.
 t_final        = 4.
@@ -44,70 +44,58 @@ observation_times = np.arange(t_1, t_final+.5*dt, observation_dt)
 
 targets = np.loadtxt('targets.txt')
 n_obs = len(targets)
-n_t = len(simulation_times)
-dofs = Vh.dim()
-
-
-misfit = SpaceTimePointwiseStateObservation(Vh, observation_times, targets)
-wind_velocity = computeVelocityField(mesh)
-
-problem = TimeDependentAD(mesh, [Vh,Vh,Vh], prior, misfit, simulation_times, wind_velocity, True)
-L_np = problem.L.array()
-M_stab_np = problem.M_stab.array()
-B_np = misfit.B.array()
-np.save('AD_L.npy', L_np)
-np.save('AD_M_stab.npy', M_stab_np)
-np.save('AD_B.npy', B_np)
-
-#  L = tf.convert_to_tensor(L_np, dtype=tf.float64)
-L = L_np
-#  M_stab = tf.convert_to_tensor(M_stab_np, dtype=tf.float64)
-M_stab = M_stab_np.reshape((1, dofs, dofs))
-#  B = tf.convert_to_tensor(B_np, dtype=tf.float64)
-B = B_np.reshape((1,n_obs, dofs))
-#  Y = tf.Variable(
-        #  tf.zeros(shape=(batch_size, n_obs * len(simulation_times)), dtype=tf.float64), 
-        #  name="Y")
-#  Y = np.zeros((batch_size, n_obs * len(simulation_times)))
-
-@tf.function
-def PTOMapF(U):
-    for i in range(batch_size):
-        U_i = tf.reshape(U[i, :], [dofs,1])
-        for t in range(len(simulation_times)):
-            Y_i_t = tf.linalg.matmul(B, U_i)
-            #  import pdb; pdb.set_trace()
-            #  Y[i, n_obs*t:n_obs*(t+1)] = Y_i_t
-            rhs = tf.linalg.matmul(M_stab, U_i)
-            U_i = tf.linalg.solve(L, rhs)
-        #  Y[i,-n_obs:] = tf.linalg.matvec(B, U_i)
-    return tf.math.identity(Y)
-
 N_t = len(simulation_times)
+dofs = 10847
+#  dofs = Vh.dim()
+#  print(f"Degrees of freedom: {dofs}\n")
 
-@tf.function
+
+#  misfit = SpaceTimePointwiseStateObservation(Vh, observation_times, targets)
+#  wind_velocity = computeVelocityField(mesh)
+
+#  problem = TimeDependentAD(mesh, [Vh,Vh,Vh], prior, misfit, simulation_times, wind_velocity, True)
+#  L_np = problem.L.array()
+#  M_stab_np = problem.M_stab.array()
+#  B_np = misfit.B.array()
+#  np.save('AD_L.npy', L_np)
+#  np.save('AD_M_stab.npy', M_stab_np)
+#  np.save('AD_B.npy', B_np)
+L_np = np.load('AD_L.npy')
+M_stab_np = np.load('AD_M_stab.npy')
+B_np =  np.load('AD_B.npy')
+
+L = L_np
+M_stab = M_stab_np.reshape((1, dofs, dofs))
+B = B_np.reshape((1,n_obs, dofs))
+
+Y_var = tf.Variable(tf.zeros([batch_size, n_obs * N_t], dtype=tf.float64), 
+        dtype=tf.float64)
+
+@tf.custom_gradient
 def PTOMap(U_inp):
     '''
     Performs batched time-stepping, and accumulates observables
     '''
     U = tf.reshape(U_inp, [batch_size, dofs, 1])
-    Y = tf.zeros([batch_size, n_obs * N_t], dtype=tf.float64)
-    for t in tf.range(N_t):
+    #  Y = tf.zeros([batch_size, n_obs * N_t], dtype=tf.float64)
+    for t in range(N_t):
         Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
-        Y = tf.concat([Y[:,:(n_obs*t)], 
-                       Y_i_t, 
-                       tf.zeros([batch_size, (N_t-1-t)*n_obs], dtype=tf.float64)], axis=1) 
-        Y.set_shape([batch_size, n_obs * N_t])
+        begin_idx = t*n_obs
+        end_idx = (t+1)*n_obs
+        Y_var[:,begin_idx:end_idx].assign(Y_i_t)
         rhs = tf.linalg.matmul(M_stab, U)
         U = tf.scan(lambda a, x: tf.linalg.solve(L, x), rhs)
     Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
-    Y = tf.concat([Y[:,:(N_t-1)*n_obs], Y_i_t], axis=1)
-    Y.set_shape([batch_size, n_obs * N_t])
+    Y_var[:,-n_obs:].assign(Y_i_t)
+
+    def grad(dy):
+        # TODO: Adjoint method
+        return dy  * tf.ones([batch_size, n_obs * N_t, dofs])
     
-    return Y
+    return Y_var, grad
 
 # Training constants
-n_weights = 80
+n_weights = 10
 lr = 3e-4
 alpha = 0.1
 train_dataset_size = 1000 # Get subset of data due to slowness
@@ -170,17 +158,34 @@ print("Model defined\n")
 #  plt.cla()
 #  plt.clf()
 
-@tf.function
 def custom_loss(U_true, U_pred):
     loss =  tf.reduce_mean(tf.square(U_pred - tf.math.log(U_true)))
-    #  fwd_loss = alpha * tf.reduce_mean(tf.square(Y_input - PTOMap(tf.math.exp(U_output))))
     fwd_loss = alpha * tf.reduce_mean(tf.square(Y_input - PTOMap(tf.math.exp(U_output))))
-    #  fwd_loss = K.print_tensor(fwd_loss, message='fwd_loss=')
-    #  loss = K.print_tensor(loss, message='mse loss=')
     return loss + fwd_loss
 
+def custom_loss_unpacked(Y, U_o, Y_i):
+    '''
+    Custom loss with forward solve built in
+    '''
+    def lossF(U_true, U_pred):
+        loss =  tf.reduce_mean(tf.square(tf.math.exp(U_pred) - U_true))
+        U = tf.reshape(tf.math.exp(U_o), [batch_size, dofs, 1])
+        for t in range(N_t):
+            Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
+            begin_idx = t*n_obs
+            end_idx = (t+1)*n_obs
+            Y[:,begin_idx:end_idx].assign(Y_i_t)
+            rhs = tf.linalg.matmul(M_stab, U)
+            U = tf.scan(lambda a, x: tf.linalg.solve(L, x), rhs)
+        Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
+        Y[:,-n_obs:].assign(Y_i_t)
+        fwd_loss = alpha * tf.reduce_mean(tf.square(Y_i - Y))
+        return loss + fwd_loss
+    return lossF
+
 print("Custom loss function defined\n")
-model.compile(loss=custom_loss, optimizer=Adam(lr=lr))
+model.compile(loss=custom_loss_unpacked(Y_var, U_output, Y_input), 
+        optimizer=Adam(lr=lr), experimental_run_tf_function=False)
 print("Model compiled\n")
 model.summary()
 
