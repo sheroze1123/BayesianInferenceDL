@@ -4,7 +4,7 @@ import warnings
 import string
 import random
 import numpy as np
-import matplotlib; matplotlib.use('macosx')
+import matplotlib; matplotlib.use('agg')
 import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore',category=FutureWarning)
 
@@ -95,12 +95,12 @@ def PTOMap(U_inp):
     return Y_var, grad
 
 # Training constants
-n_weights = 10
-lr = 3e-4
-alpha = 0.1
+n_weights = 100
+lr = 3e-5
+alpha = 1.0
 train_dataset_size = 1000 # Get subset of data due to slowness
 val_dataset_size = 100
-n_epochs = 100
+n_epochs = 1000
 
 U_train = np.load('../data/AD_parameters_training_dataset.npy')
 U_val = np.load('../data/AD_parameters_validation_dataset.npy')
@@ -158,10 +158,14 @@ print("Model defined\n")
 #  plt.cla()
 #  plt.clf()
 
-def custom_loss(U_true, U_pred):
-    loss =  tf.reduce_mean(tf.square(U_pred - tf.math.log(U_true)))
-    fwd_loss = alpha * tf.reduce_mean(tf.square(Y_input - PTOMap(tf.math.exp(U_output))))
-    return loss + fwd_loss
+def custom_loss_MSE(Y, U_o, Y_i):
+    '''
+    Custom loss with forward solve built in
+    '''
+    def lossF(U_true, U_pred):
+        loss =  tf.reduce_mean(tf.square(tf.math.exp(U_pred) - U_true))
+        return loss
+    return lossF
 
 def custom_loss_unpacked(Y, U_o, Y_i):
     '''
@@ -185,12 +189,21 @@ def custom_loss_unpacked(Y, U_o, Y_i):
 
 print("Custom loss function defined\n")
 model.compile(loss=custom_loss_unpacked(Y_var, U_output, Y_input), 
-        optimizer=Adam(lr=lr), experimental_run_tf_function=False)
+        optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
 print("Model compiled\n")
 model.summary()
 
 
-model.fit(Y_train, U_train, batch_size=batch_size, epochs=n_epochs, shuffle=True, 
+history = model.fit(Y_train, U_train, batch_size=batch_size, epochs=n_epochs, shuffle=True, 
         validation_data=(Y_val, U_val))
-        
 
+tr_losses = history.history['mape']
+vmapes = history.history['val_mape']
+plt.cla()
+plt.clf()
+plt.semilogy(tr_losses)
+plt.semilogy(vmapes)
+plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
+plt.xlabel("Epoch", fontsize=10)
+plt.ylabel("Absolute percentage error", fontsize=10)
+plt.savefig('training_error_with_MA_term.png', dpi=200)
