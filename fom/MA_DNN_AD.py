@@ -13,8 +13,9 @@ from tensorflow.keras import Sequential, Model, Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import *
 from tensorflow.python.framework import ops
-
 tf.keras.backend.set_floatx('float64')
+
+from MA_model_def import *
 
 #  import dolfin as dl
 #  import hippylib as hl
@@ -63,12 +64,20 @@ dofs = 10847
 L_np = np.load('AD_L.npy')
 M_stab_np = np.load('AD_M_stab.npy')
 B_np =  np.load('AD_B.npy')
+Mt_stab_np = np.load('AD_Mt_stab.npy')
+Lt_np = np.load('AD_Lt.npy')
 
 L = L_np
+Lt = Lt_np
 M_stab = M_stab_np.reshape((1, dofs, dofs))
+Mt_stab = Mt_stab_np.reshape((1, dofs, dofs))
 B = B_np.reshape((1,n_obs, dofs))
 
 Y_var = tf.Variable(tf.zeros([batch_size, n_obs * N_t], dtype=tf.float64), 
+        dtype=tf.float64)
+U_var = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64), 
+        dtype=tf.float64)
+grad_state = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64),
         dtype=tf.float64)
 
 @tf.custom_gradient
@@ -112,51 +121,20 @@ U_val = U_val[:val_dataset_size, :]
 Y_train = Y_train[:train_dataset_size, :]
 Y_val = Y_val[:val_dataset_size, :]
 
-
 # Tensorflow Keras model
-Y_input = Input(shape=(n_obs * N_t,), name='Y_input')
-layer1 = Dense(n_weights, activation='relu')
-layer1out = layer1(Y_input)
-layer2 = Dense(n_weights, activation='relu')
-layer2out = layer2(layer1out)
-U_output = Dense(dofs, name='U_output')(layer2out)
-model = Model(inputs=Y_input, outputs=U_output)
+#  Y_input = Input(shape=(n_obs * N_t,), name='Y_input')
+#  layer1 = Dense(n_weights, activation='relu')
+#  layer1out = layer1(Y_input)
+#  layer2 = Dense(n_weights, activation='relu')
+#  layer2out = layer2(layer1out)
+#  U_output = Dense(dofs, name='U_output')(layer2out)
+#  model = Model(inputs=Y_input, outputs=U_output)
+
+model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 100, n_obs*N_t, dofs)
+Y_input = model.inputs[0]
+U_output = model.outputs[0]
 
 print("Model defined\n")
-
-########################################################################
-# Loss function gradient check
-########################################################################
-#  L = tf.reduce_mean(tf.square(Y_input - G(tf.math.exp(U_output))))
-#  grad_bias_1 = gradients(L, model.trainable_weights[1])[0]
-#  dummy_inp = np.random.randn(batch_size, n_obs)
-#  grad_bias_1_eval = get_session().run(grad_bias_1, feed_dict={Y_input:dummy_inp})
-#  bias_1_vals = layer1.get_weights()[1]
-#  kernel_vals = layer1.get_weights()[0]
-#  L_0 = get_session().run(L, feed_dict={Y_input:dummy_inp})
-#  eps_bias = np.random.randn(n_weights) #Random direction to perturn bias weights
-#  eps_bias = eps_bias/np.linalg.norm(eps_bias)
-#  dir_grad = np.dot(grad_bias_1_eval, eps_bias)
-
-#  n_eps = 32
-#  hs = np.power(2., -np.arange(n_eps))
-
-#  err_grads = []
-#  grads = []
-#  for h in hs:
-    #  b_h = bias_1_vals + h * eps_bias #Perturb bias
-    #  layer1.set_weights([kernel_vals, b_h]) #Update bias in model
-    #  L_h = get_session().run(L, feed_dict={Y_input:dummy_inp}) #Compute loss post bias
-    #  a_g = (L_h - L_0)/h
-    #  grads.append(a_g)
-    #  err = abs(a_g - dir_grad)/abs(dir_grad)
-    #  err_grads.append(err)
-
-#  plt.loglog(hs, err_grads, "-ob", label="Error Grad")
-#  plt.loglog(hs, (.5*err_grads[0]/hs[0])*hs, "-.k", label="First Order")
-#  plt.savefig('grad_fd_check_G_wrt_bias.png', dpi=200)
-#  plt.cla()
-#  plt.clf()
 
 def custom_loss_MSE(Y, U_o, Y_i):
     '''
@@ -187,15 +165,57 @@ def custom_loss_unpacked(Y, U_o, Y_i):
         return loss + fwd_loss
     return lossF
 
+def misfit_wrapper(Y, U_var, grad_state, Y_pred):
+    @tf.custom_gradient
+    def misfit(U_o):
+        U = tf.reshape(tf.math.exp(U_o), [batch_size, dofs, 1])
+        U_var[:, :, 0].assign(U)
+        for t in range(N_t):
+            Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
+            begin_idx = t*n_obs
+            end_idx = (t+1)*n_obs
+            Y[:,begin_idx:end_idx].assign(Y_i_t)
+            rhs = tf.linalg.matmul(M_stab, U)
+            U = tf.scan(lambda a, x: tf.linalg.solve(L, x), rhs)
+            U_var[:,:,t].assign(U)
+        Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
+        Y[:,-n_obs:].assign(Y_i_t)
+
+        def grad(dy):
+            p = tf.zeros([batch_size, dofs, 1], dtype=tf.float64) 
+
+            for t in range(N_t-1, 0, -1):
+                # When t is a time that is not observed, Bt(Bu-d) should be zero
+                rhs = tf.linalg.matmul(Mt_stab, p) - grad_state[:, :, t]
+                p = tf.scan(lambda a, x: tf.linalg.solve(Lt, x), rhs)
+
+            g = tf.scan(lambda a, x: tf.linalg.solve(M, x), -tf.linalg.solve(Mt_stab, p))
+            return dy * g
+        
+        misfit_val = tf.reduce_mean(tf.square(Y_pred - Y))
+        return misfit_val, grad
+    return misfit
+
+def custom_loss_cg(Y, U_o, Y_i):
+    '''
+    Custom loss with forward solve built in
+    '''
+    forward_loss = misfit_wrapper(Y_var, U_var, grad_state, Y_i)
+    def lossF(U_true, U_pred):
+        loss =  tf.reduce_mean(tf.square(tf.math.exp(U_pred) - U_true))
+        fwd_loss = forward_loss(U_o)
+        return loss + fwd_loss
+    return lossF
+
 print("Custom loss function defined\n")
 model.compile(loss=custom_loss_unpacked(Y_var, U_output, Y_input), 
         optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
 print("Model compiled\n")
 model.summary()
 
-
+cbks = [LearningRateScheduler(lr_schedule)]
 history = model.fit(Y_train, U_train, batch_size=batch_size, epochs=n_epochs, shuffle=True, 
-        validation_data=(Y_val, U_val))
+        validation_data=(Y_val, U_val), callbacks=cbks)
 
 tr_losses = history.history['mape']
 vmapes = history.history['val_mape']

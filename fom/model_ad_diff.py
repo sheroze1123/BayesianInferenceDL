@@ -203,6 +203,7 @@ class TimeDependentAD:
         grad_state = hl.TimeDependentVector(self.simulation_times)
         grad_state.initialize(self.M, 0)
         self.misfit.grad(hl.STATE, x, grad_state)
+        import pdb; pdb.set_trace()
         
         out.zero()
         
@@ -462,9 +463,9 @@ if __name__ == "__main__":
     
     t_init         = 0.
     t_final        = 4.
-    t_1            = 0. # 1.
+    t_1            = 1. # 1.
     dt             = .1
-    observation_dt = .1 #0.2
+    observation_dt = .2 #0.2
     
     simulation_times = np.arange(t_init, t_final+.5*dt, dt)
     observation_times = np.arange(t_1, t_final+.5*dt, observation_dt)
@@ -478,6 +479,7 @@ if __name__ == "__main__":
 
     problem = TimeDependentAD(mesh, [Vh,Vh,Vh], prior, misfit, simulation_times, wind_velocity, True)
 
+    '''
     # Generate training set for model aware DNN
     tr_dataset_size = 1000
     U_s = np.zeros((tr_dataset_size, ndofs))
@@ -521,7 +523,7 @@ if __name__ == "__main__":
     np.save('../data/AD_parameters_validation_dataset.npy', U_s)
     np.save('../data/AD_fom_qois_validation_dataset.npy', Y_s)
     import pdb; pdb.set_trace()
-
+    '''
     
     if rank == 0:
         print( sep, "Generate synthetic observation", sep )
