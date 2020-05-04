@@ -36,9 +36,9 @@ batch_size = 2
 
 t_init         = 0.
 t_final        = 4.
-t_1            = 0.
+t_1            = 1.
 dt             = .1
-observation_dt = .1
+observation_dt = .2
 
 simulation_times = np.arange(t_init, t_final+.5*dt, dt)
 observation_times = np.arange(t_1, t_final+.5*dt, observation_dt)
@@ -47,13 +47,14 @@ targets = np.loadtxt('targets.txt')
 n_obs = len(targets)
 N_t = len(simulation_times)
 dofs = 10847
+
+S_T = tf.convert_to_tensor(simulation_times, dtype=tf.float64)
+O_T = tf.convert_to_tensor(observation_times, dtype=tf.float64)
+
 #  dofs = Vh.dim()
 #  print(f"Degrees of freedom: {dofs}\n")
-
-
 #  misfit = SpaceTimePointwiseStateObservation(Vh, observation_times, targets)
 #  wind_velocity = computeVelocityField(mesh)
-
 #  problem = TimeDependentAD(mesh, [Vh,Vh,Vh], prior, misfit, simulation_times, wind_velocity, True)
 #  L_np = problem.L.array()
 #  M_stab_np = problem.M_stab.array()
@@ -61,6 +62,7 @@ dofs = 10847
 #  np.save('AD_L.npy', L_np)
 #  np.save('AD_M_stab.npy', M_stab_np)
 #  np.save('AD_B.npy', B_np)
+
 L_np = np.load('AD_L.npy')
 M_stab_np = np.load('AD_M_stab.npy')
 B_np =  np.load('AD_B.npy')
@@ -80,33 +82,10 @@ U_var = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64),
 grad_state = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64),
         dtype=tf.float64)
 
-@tf.custom_gradient
-def PTOMap(U_inp):
-    '''
-    Performs batched time-stepping, and accumulates observables
-    '''
-    U = tf.reshape(U_inp, [batch_size, dofs, 1])
-    #  Y = tf.zeros([batch_size, n_obs * N_t], dtype=tf.float64)
-    for t in range(N_t):
-        Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
-        begin_idx = t*n_obs
-        end_idx = (t+1)*n_obs
-        Y_var[:,begin_idx:end_idx].assign(Y_i_t)
-        rhs = tf.linalg.matmul(M_stab, U)
-        U = tf.scan(lambda a, x: tf.linalg.solve(L, x), rhs)
-    Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
-    Y_var[:,-n_obs:].assign(Y_i_t)
-
-    def grad(dy):
-        # TODO: Adjoint method
-        return dy  * tf.ones([batch_size, n_obs * N_t, dofs])
-    
-    return Y_var, grad
-
 # Training constants
 n_weights = 100
-lr = 3e-5
-alpha = 1.0
+lr = 3e-4
+alpha = 0.2
 train_dataset_size = 1000 # Get subset of data due to slowness
 val_dataset_size = 100
 n_epochs = 1000
@@ -181,12 +160,13 @@ def misfit_wrapper(Y, U_var, grad_state, Y_pred):
         Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
         Y[:,-n_obs:].assign(Y_i_t)
 
-        def grad(dy):
+        def grad(dy, variables=None):
             p = tf.zeros([batch_size, dofs, 1], dtype=tf.float64) 
 
             for t in range(N_t-1, 0, -1):
                 # When t is a time that is not observed, Bt(Bu-d) should be zero
-                rhs = tf.linalg.matmul(Mt_stab, p) - grad_state[:, :, t]
+                rhs = tf.linalg.matmul(Mt_stab, p) \
+                        - tf.reshape(grad_state[:, :, t], [batch_size, dofs, 1])
                 p = tf.scan(lambda a, x: tf.linalg.solve(Lt, x), rhs)
 
             g = tf.scan(lambda a, x: tf.linalg.solve(M, x), -tf.linalg.solve(Mt_stab, p))
@@ -196,7 +176,7 @@ def misfit_wrapper(Y, U_var, grad_state, Y_pred):
         return misfit_val, grad
     return misfit
 
-def custom_loss_cg(Y, U_o, Y_i):
+def custom_loss_cg(Y, U_o, Y_i, grad_state, U_var):
     '''
     Custom loss with forward solve built in
     '''
@@ -208,6 +188,8 @@ def custom_loss_cg(Y, U_o, Y_i):
     return lossF
 
 print("Custom loss function defined\n")
+#  model.compile(loss=custom_loss_cg(Y_var, U_output, Y_input, grad_state, U_var), 
+        #  optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
 model.compile(loss=custom_loss_unpacked(Y_var, U_output, Y_input), 
         optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
 print("Model compiled\n")
