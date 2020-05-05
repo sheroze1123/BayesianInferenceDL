@@ -43,9 +43,13 @@ observation_dt = .2
 simulation_times = np.arange(t_init, t_final+.5*dt, dt)
 observation_times = np.arange(t_1, t_final+.5*dt, observation_dt)
 
+# indices of the observations in the simulation times
+obs_sim_idxs = ((observation_times - t_1)/dt).astype(int) 
+
 targets = np.loadtxt('targets.txt')
 n_obs = len(targets)
 N_t = len(simulation_times)
+N_o_t = len(observation_times)
 dofs = 10847
 
 S_T = tf.convert_to_tensor(simulation_times, dtype=tf.float64)
@@ -75,19 +79,13 @@ M_stab = M_stab_np.reshape((1, dofs, dofs))
 Mt_stab = Mt_stab_np.reshape((1, dofs, dofs))
 B = B_np.reshape((1,n_obs, dofs))
 
-Y_var = tf.Variable(tf.zeros([batch_size, n_obs * N_t], dtype=tf.float64), 
-        dtype=tf.float64)
-U_var = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64), 
-        dtype=tf.float64)
-grad_state = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64),
-        dtype=tf.float64)
 
 # Training constants
 n_weights = 100
 lr = 3e-4
 alpha = 0.2
-train_dataset_size = 1000 # Get subset of data due to slowness
-val_dataset_size = 100
+train_dataset_size = 10000 # Get subset of data due to slowness
+val_dataset_size = 500
 n_epochs = 1000
 
 U_train = np.load('../data/AD_parameters_training_dataset.npy')
@@ -109,9 +107,16 @@ Y_val = Y_val[:val_dataset_size, :]
 #  U_output = Dense(dofs, name='U_output')(layer2out)
 #  model = Model(inputs=Y_input, outputs=U_output)
 
-model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 100, n_obs*N_t, dofs)
+model = res_bn_fc_model(ELU(), Adam, 3e-4, 2, 100, n_obs*N_o_t, dofs)
 Y_input = model.inputs[0]
 U_output = model.outputs[0]
+
+Y_var = tf.Variable(tf.zeros([batch_size, n_obs * N_o_t], dtype=tf.float64), 
+        dtype=tf.float64)
+U_var = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64), 
+        dtype=tf.float64)
+grad_state = tf.Variable(tf.zeros([batch_size, dofs, N_t], dtype=tf.float64),
+        dtype=tf.float64)
 
 print("Model defined\n")
 
@@ -144,21 +149,51 @@ def custom_loss_unpacked(Y, U_o, Y_i):
         return loss + fwd_loss
     return lossF
 
+def custom_loss_unpacked_sparse_obs(Y_var, U_o, Y_i, U_var):
+    '''
+    Custom loss with forward solve built in
+    '''
+    def lossF(U_true, U_pred):
+        U = tf.reshape(tf.math.exp(U_o), [batch_size, dofs, 1])
+        U_var[:,:,0].assign(U)
+        for t in range(1,N_t):
+            rhs = tf.linalg.matmul(M_stab, U)
+            U = tf.scan(lambda a, x: tf.linalg.solve(L, x), rhs)
+            U_var[:,:,t].assign(U)
+
+        for t in range(N_o_t):
+            Y_t = tf.linalg.matvec(B, U_var[:,:,obs_sim_idxs[t]])
+            begin_idx = t * n_obs
+            end_idx = (t+1) * n_obs
+            Y_var[:,begin_idx:end_idx].assign(Y_t)
+        loss =  tf.reduce_mean(tf.square(tf.math.exp(U_pred) - U_true))
+        fwd_loss = alpha * tf.reduce_mean(tf.square(Y_i - Y_var))
+        return loss + fwd_loss
+    return lossF
+
 def misfit_wrapper(Y, U_var, grad_state, Y_pred):
     @tf.custom_gradient
     def misfit(U_o):
         U = tf.reshape(tf.math.exp(U_o), [batch_size, dofs, 1])
         U_var[:, :, 0].assign(U)
         for t in range(N_t):
-            Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
+            #  Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
             begin_idx = t*n_obs
             end_idx = (t+1)*n_obs
-            Y[:,begin_idx:end_idx].assign(Y_i_t)
+            #  Y[:,begin_idx:end_idx].assign(Y_i_t)
             rhs = tf.linalg.matmul(M_stab, U)
             U = tf.scan(lambda a, x: tf.linalg.solve(L, x), rhs)
             U_var[:,:,t].assign(U)
-        Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
-        Y[:,-n_obs:].assign(Y_i_t)
+        #  Y_i_t = tf.reshape(tf.linalg.matmul(B, U), [batch_size, n_obs])
+        #  Y[:,-n_obs:].assign(Y_i_t)
+
+        for t in observation_times:
+            t_idx = tf.math.floordiv(t, dt)
+            t_o_idx = tf.math.floordiv(t - t_1, observation_dt) 
+            Y_t = tf.linalg.matvec(B, U[:,:,t_idx])
+            begin_idx = t * n_obs
+            end_idx = (t+1) * n_obs
+            Y[:,begin_idx:end_idx].assign(Y_t)
 
         def grad(dy, variables=None):
             p = tf.zeros([batch_size, dofs, 1], dtype=tf.float64) 
@@ -190,7 +225,9 @@ def custom_loss_cg(Y, U_o, Y_i, grad_state, U_var):
 print("Custom loss function defined\n")
 #  model.compile(loss=custom_loss_cg(Y_var, U_output, Y_input, grad_state, U_var), 
         #  optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
-model.compile(loss=custom_loss_unpacked(Y_var, U_output, Y_input), 
+#  model.compile(loss=custom_loss_unpacked(Y_var, U_output, Y_input), 
+        #  optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
+model.compile(loss=custom_loss_unpacked_sparse_obs(Y_var, U_output, Y_input, U_var), 
         optimizer=Adam(lr=lr), experimental_run_tf_function=False, metrics=['mape'])
 print("Model compiled\n")
 model.summary()
@@ -199,13 +236,24 @@ cbks = [LearningRateScheduler(lr_schedule)]
 history = model.fit(Y_train, U_train, batch_size=batch_size, epochs=n_epochs, shuffle=True, 
         validation_data=(Y_val, U_val), callbacks=cbks)
 
-tr_losses = history.history['mape']
-vmapes = history.history['val_mape']
+tr_mapes = history.history['mape']
+val_mapes = history.history['val_mape']
+plt.cla()
+plt.clf()
+plt.semilogy(tr_mapes)
+plt.semilogy(val_mapes)
+plt.legend(["Mean Relative Error (Train)", "Mean Relative Error (Validation)"], fontsize=10)
+plt.xlabel("Epoch", fontsize=10)
+plt.ylabel("Absolute percentage error", fontsize=10)
+plt.savefig('mape_curve_with_MA_term.png', dpi=200)
+
+tr_losses = history.history['loss']
+val_losses = history.history['val_loss']
 plt.cla()
 plt.clf()
 plt.semilogy(tr_losses)
 plt.semilogy(vmapes)
-plt.legend(["Mean training error", "Mean validation error"], fontsize=10)
+plt.legend(["Mean Training Error", "Mean Validation Error"], fontsize=10)
 plt.xlabel("Epoch", fontsize=10)
-plt.ylabel("Absolute percentage error", fontsize=10)
-plt.savefig('training_error_with_MA_term.png', dpi=200)
+plt.ylabel("Mean l2 loss", fontsize=10)
+plt.savefig('loss_curve_with_MA_term.png', dpi=200)
